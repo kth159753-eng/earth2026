@@ -12,9 +12,9 @@ export function Field({
 }) {
   return (
     <label className="block space-y-2">
-      <span className="flex items-center justify-between text-[13px] font-medium tracking-wide text-stone-300">
+      <span className="flex items-center justify-between text-[13px] font-medium text-[#b3b3b3]">
         {label}
-        {hint ? <span className="font-normal text-stone-500">{hint}</span> : null}
+        {hint ? <span className="font-normal text-[#808080]">{hint}</span> : null}
       </span>
       {children}
     </label>
@@ -29,8 +29,8 @@ export function TextField({
     <input
       {...props}
       className={cn(
-        "h-12 w-full rounded-xl border border-white/10 bg-black/35 px-4 text-[15px] text-stone-100 outline-none transition",
-        "placeholder:text-stone-600 focus:border-gold/50 focus:bg-black/50",
+        "h-10 w-full rounded-[4px] border border-[#555] bg-[rgba(22,22,22,0.66)] px-3.5 text-sm text-white outline-none transition duration-100",
+        "placeholder:text-[#555] focus:border-white",
         className,
       )}
     />
@@ -46,18 +46,18 @@ export function Button({
   variant?: "gold" | "ghost" | "line" | "danger" | "dark";
 }) {
   const styles = {
-    gold: "bg-gold text-ink hover:bg-gold-bright",
-    ghost: "bg-white/5 text-stone-200 hover:bg-white/10",
-    line: "border border-white/15 bg-transparent text-stone-200 hover:border-gold/40 hover:text-gold-bright",
-    danger: "bg-rose-900/70 text-rose-50 hover:bg-rose-800",
-    dark: "bg-black/50 text-gold-bright hover:bg-black/70",
+    gold: "bg-[#e50914] text-white hover:bg-[#c00710] active:bg-[#95050c]",
+    ghost: "bg-[rgba(109,109,110,0.7)] text-white hover:bg-[rgba(109,109,110,0.4)]",
+    line: "border border-white bg-transparent text-white hover:bg-white/10",
+    danger: "bg-[#e50914] text-white hover:bg-[#c00710]",
+    dark: "bg-white text-black hover:bg-white/75",
   } as const;
 
   return (
     <button
       {...props}
       className={cn(
-        "inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex h-10 items-center justify-center gap-1.5 rounded-[4px] px-6 text-sm font-bold transition duration-100 disabled:cursor-not-allowed disabled:opacity-50",
         styles[variant],
         className,
       )}
@@ -76,12 +76,12 @@ export function Notice({
 }) {
   const toneClass =
     tone === "warn"
-      ? "border-rose-400/20 bg-rose-950/40 text-rose-100"
+      ? "border-[#e50914]/40 bg-[#3d0205] text-white"
       : tone === "ok"
-        ? "border-teal/25 bg-teal/10 text-teal"
-        : "border-white/10 bg-white/5 text-stone-400";
+        ? "border-[#46d369]/30 bg-[#0d2a16] text-[#46d369]"
+        : "border-[#333] bg-[#1f1f1f] text-[#b3b3b3]";
   return (
-    <p className={cn("rounded-xl border px-4 py-3 text-sm leading-6", toneClass)}>
+    <p className={cn("rounded-[4px] border px-4 py-3 text-sm leading-6", toneClass)}>
       {children}
     </p>
   );
@@ -97,14 +97,14 @@ export function SectionTitle({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
         {kicker ? (
-          <p className="mb-1 text-[11px] font-semibold tracking-[0.22em] text-gold/80 uppercase">
+          <p className="mb-1 text-[11px] font-extrabold tracking-[0.22em] text-[#e50914]">
             {kicker}
           </p>
         ) : null}
-        <h2 className="text-xl font-semibold tracking-tight text-stone-100">{title}</h2>
+        <h2 className="text-[22px] font-bold tracking-tight text-white">{title}</h2>
       </div>
       {action}
     </div>
@@ -114,15 +114,14 @@ export function SectionTitle({
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cn("flex items-center gap-3", compact && "gap-2")}>
-      <span className="relative grid h-10 w-10 place-items-center rounded-full border border-gold/35 bg-black/40">
-        <span className="h-5 w-5 rounded-full bg-gradient-to-br from-gold-bright via-teal to-sky-900 shadow-[0_0_16px_rgba(212,175,120,0.35)]" />
-        <span className="absolute inset-1 rounded-full border border-gold/20" />
-      </span>
+      <p className="text-[22px] font-black tracking-[-0.07em] text-[#e50914] sm:text-[26px]">
+        EARTH
+      </p>
       <div className={cn(compact && "hidden sm:block")}>
-        <p className="font-display text-[13px] tracking-[0.28em] text-gold-bright">
-          EARTH 2026
+        <p className="text-[11px] font-semibold tracking-[0.16em] text-[#b3b3b3] uppercase">
+          2026
         </p>
-        <p className="text-[11px] text-stone-500">지구과학 실전 모의고사</p>
+        <p className="text-[11px] text-[#808080]">지구과학 실전 모의고사</p>
       </div>
     </div>
   );

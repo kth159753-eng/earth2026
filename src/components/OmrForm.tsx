@@ -59,8 +59,10 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-6">
-      <p className="text-[11px] tracking-[0.28em] text-gold/80">EARTH 2026 OMR</p>
-      <h1 className="mt-2 text-2xl font-semibold">{session?.label ?? "모의고사"}</h1>
+      <p className="text-[11px] tracking-[0.28em] text-[#e50914]">EARTH 2026 OMR</p>
+      <h1 className="mt-2 font-serif text-[40px] font-bold leading-none tracking-[-0.05em]">
+        {session?.label ?? "모의고사"}
+      </h1>
       <p className="mt-1 text-sm text-stone-400">
         {gradeLabel(meta.grade)} {classLabel(meta.class_number)} · 이름 없이 번호만 입력합니다
       </p>
@@ -74,7 +76,7 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
               setStudentNumber(Number(event.target.value));
               setDone(false);
             }}
-            className="h-12 w-full rounded-xl border border-white/10 bg-black/40 px-3"
+            className="h-12 w-full rounded-[4px] border border-white/10 bg-black/40 px-3"
           >
             {roster.map((number) => (
               <option key={number} value={number}>
@@ -84,13 +86,13 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
           </select>
         </label>
 
-        <div className="overflow-hidden rounded-2xl border border-white/10">
+        <div className="overflow-hidden rounded-[4px] border border-white/10">
           {Array.from({ length: QUESTION_COUNT }, (_, question) => (
             <div
               key={question}
               className="grid grid-cols-[52px_1fr] items-center border-b border-white/8 last:border-b-0"
             >
-              <div className="bg-white/5 py-3 text-center text-sm font-semibold text-gold-bright">
+              <div className="bg-white/5 py-3 text-center text-sm font-semibold text-[#e50914]">
                 {question + 1}
               </div>
               <div className="flex justify-around px-2 py-2">
@@ -105,7 +107,7 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
                       className={cn(
                         "grid h-11 w-11 place-items-center rounded-full border text-sm",
                         selected
-                          ? "border-gold bg-gold text-ink"
+                          ? "border-[#e50914] bg-[#e50914] text-white"
                           : "border-stone-500 text-stone-300",
                       )}
                     >
@@ -119,12 +121,12 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
         </div>
 
         {error ? (
-          <p className="rounded-xl border border-rose-400/20 bg-rose-950/40 px-4 py-3 text-sm">
+          <p className="rounded-[4px] border border-rose-400/20 bg-rose-950/40 px-4 py-3 text-sm">
             {error}
           </p>
         ) : null}
         {done ? (
-          <p className="rounded-xl border border-teal/25 bg-teal/10 px-4 py-3 text-sm text-teal">
+          <p className="rounded-[4px] border border-teal/25 bg-teal/10 px-4 py-3 text-sm text-teal">
             제출이 완료되었습니다. 수정이 필요하면 다시 제출할 수 있습니다.
           </p>
         ) : null}
@@ -132,7 +134,7 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
         <button
           type="submit"
           disabled={pending}
-          className="h-13 w-full rounded-2xl bg-gold text-base font-bold text-ink disabled:opacity-50"
+          className="h-13 w-full rounded-[4px] bg-[#e50914] text-base font-bold text-white disabled:opacity-50"
         >
           {pending ? "제출 중..." : "OMR 제출"}
         </button>

@@ -23,8 +23,10 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
     <div className="mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] tracking-[0.22em] text-gold/70">PREVIEW</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{session.label}</h1>
+          <p className="text-[11px] font-extrabold tracking-[0.22em] text-[#e50914]">PREVIEW</p>
+          <h1 className="font-serif text-[40px] font-bold leading-none tracking-[-0.05em]">
+            {session.label}
+          </h1>
           <p className="text-sm text-stone-400">
             왼쪽은 시험지, 오른쪽은 해설지입니다. PDF 또는 이미지를 올리면 바로 보입니다.
           </p>
@@ -130,7 +132,7 @@ function PaperPane({
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#10141b]">
+    <section className="overflow-hidden rounded-[4px] border border-[#333] bg-[#1f1f1f]">
       <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
         <h2 className="text-sm font-semibold tracking-wide">{title}</h2>
         <div className="flex items-center gap-2">
@@ -167,7 +169,7 @@ function PaperPane({
               <p className="text-lg text-stone-200">{title} 미리보기</p>
               <p className="mt-2 max-w-sm text-sm leading-6 text-stone-500">
                 첨부하신 파일을 여기에 올려 주세요. 또는{" "}
-                <code className="text-gold-bright">public/exams/{decodeURIComponent(fallback.split("/")[2] || "")}/</code>
+                <code className="text-white">public/exams/{decodeURIComponent(fallback.split("/")[2] || "")}/</code>
                 폴더에 paper.pdf / solution.pdf를 넣으면 자동으로 보입니다.
               </p>
               <div className="mt-5">

@@ -24,16 +24,22 @@ function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="relative isolate flex min-h-dvh items-center justify-center px-4 py-10">
+    <main className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-[4%] py-10">
       <div className="starfield" />
       <div className="vignette" />
       <div className="relative w-full max-w-[440px]">
-        <div className="mb-8 flex justify-center">
+        <div className="mb-8">
           <BrandMark />
         </div>
-        <section className="glass rounded-3xl p-6 sm:p-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-50">{title}</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-400">{subtitle}</p>
+        <section className="rounded-[4px] bg-[#1f1f1f] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.7)] sm:p-8">
+          <p className="flex items-center gap-1.5 text-[13px] font-bold tracking-[0.28em]">
+            <b className="text-[22px] font-black tracking-[-0.08em] text-[#e50914]">E</b>
+            시험
+          </p>
+          <h1 className="mt-2 font-serif text-[40px] font-bold leading-[0.95] tracking-[-0.04em] text-white">
+            {title}
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-[#b3b3b3]">{subtitle}</p>
           <div className="mt-7">{children}</div>
         </section>
       </div>
@@ -93,11 +99,11 @@ export function LoginForm() {
           {pending ? "확인 중..." : "입장하기"}
         </Button>
       </form>
-      <div className="mt-6 flex items-center justify-between text-sm text-stone-400">
-        <Link href="/forgot-password" className="hover:text-gold-bright">
+      <div className="mt-6 flex items-center justify-between text-sm text-[#b3b3b3]">
+        <Link href="/forgot-password" className="hover:text-white">
           비밀번호 찾기
         </Link>
-        <Link href="/signup" className="hover:text-gold-bright">
+        <Link href="/signup" className="hover:text-white">
           회원가입
         </Link>
       </div>
@@ -238,9 +244,9 @@ export function SignupForm() {
           {pending ? "등록 중..." : "계정 만들기"}
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-stone-400">
+      <p className="mt-6 text-center text-sm text-[#b3b3b3]">
         이미 계정이 있나요?{" "}
-        <Link href="/" className="text-gold-bright hover:underline">
+        <Link href="/" className="text-white hover:underline">
           로그인
         </Link>
       </p>
@@ -298,8 +304,8 @@ export function ForgotPasswordForm() {
           {pending ? "전송 중..." : "재설정 메일 보내기"}
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-stone-400">
-        <Link href="/" className="hover:text-gold-bright">
+      <p className="mt-6 text-center text-sm text-[#b3b3b3]">
+        <Link href="/" className="hover:text-white">
           로그인으로 돌아가기
         </Link>
       </p>

@@ -40,7 +40,7 @@ function OmrInner() {
   }
 
   if (!meta) {
-    return <main className="min-h-dvh bg-void" />;
+    return <main className="min-h-dvh bg-[#141414]" />;
   }
 
   return <OmrForm code={code} meta={meta} />;
@@ -48,7 +48,7 @@ function OmrInner() {
 
 export default function OmrPage() {
   return (
-    <Suspense fallback={<main className="min-h-dvh bg-void" />}>
+    <Suspense fallback={<main className="min-h-dvh bg-[#141414]" />}>
       <OmrInner />
     </Suspense>
   );

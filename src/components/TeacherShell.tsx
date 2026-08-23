@@ -52,12 +52,12 @@ export function TeacherShell({
   }
 
   return (
-    <div className="min-h-dvh bg-void text-stone-100">
-      <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between border-b border-white/10 bg-void/90 px-3 py-3 backdrop-blur">
+    <div className="min-h-dvh bg-[#141414] text-white">
+      <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent px-[4%] py-3">
         <BrandMark compact />
         <button
           type="button"
-          className="rounded-lg border border-white/15 px-3 py-2 text-sm"
+          className="rounded-[4px] bg-[rgba(109,109,110,0.7)] px-3 py-2 text-sm font-bold"
           onClick={() => setOpen((value) => !value)}
         >
           회차
@@ -67,7 +67,7 @@ export function TeacherShell({
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/85 lg:hidden"
           aria-label="닫기"
           onClick={() => setOpen(false)}
         />
@@ -75,25 +75,23 @@ export function TeacherShell({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[240px] overflow-y-auto border-r border-white/8 bg-[#0b0e13] px-3 py-5 transition-transform",
+          "fixed inset-y-0 left-0 z-40 w-[232px] overflow-y-auto border-r border-[#1f1f1f] bg-black px-2 py-4 transition-transform duration-[250ms]",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
-        <div className="mb-6 px-2">
+        <div className="mb-5 px-2">
           <BrandMark />
         </div>
-        <div className="mb-5 rounded-2xl border border-white/8 bg-white/3 px-3 py-3">
-          <p className="text-[11px] tracking-wider text-stone-500">교사</p>
-          <p className="mt-1 truncate text-sm font-medium text-stone-100">
-            {profile.full_name}
+        <div className="mb-4 rounded-[4px] bg-[#1f1f1f] px-3 py-3">
+          <p className="text-[11px] font-semibold tracking-[0.16em] text-[#808080] uppercase">
+            프로필
           </p>
-          <p className="truncate text-xs text-stone-500">{profile.username}</p>
+          <p className="mt-1 truncate text-sm font-bold text-white">{profile.full_name}</p>
+          <p className="truncate text-xs text-[#808080]">{profile.username}</p>
         </div>
         {Object.entries(grouped).map(([year, sessions]) => (
-          <div key={year} className="mb-5">
-            <p className="px-2 pb-2 text-[11px] font-semibold tracking-[0.18em] text-gold/70">
-              {year}
-            </p>
+          <div key={year} className="mb-4">
+            <p className="px-2 pb-2 text-[12px] font-extrabold text-white">{year}</p>
             <div className="space-y-1">
               {sessions.map((session) => (
                 <SessionLink
@@ -109,10 +107,10 @@ export function TeacherShell({
         ))}
       </aside>
 
-      <div className="lg:pl-[240px]">
-        <header className="sticky top-0 z-20 border-b border-white/8 bg-void/80 px-3 py-3 backdrop-blur sm:px-5 lg:top-0">
+      <div className="lg:pl-[232px]">
+        <header className="sticky top-0 z-20 bg-gradient-to-b from-black/88 to-transparent px-[4%] py-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <nav className="grid grid-cols-3 gap-2 md:flex">
+            <nav className="flex flex-wrap gap-4 text-[13px]">
               {NAV.map((item) => {
                 const active = section === item.id;
                 return (
@@ -120,10 +118,10 @@ export function TeacherShell({
                     key={item.id}
                     href={hrefFor(item.id, sessionId)}
                     className={cn(
-                      "rounded-full px-3 py-2 text-center text-[13px] font-medium transition sm:px-4",
+                      "transition duration-100",
                       active
-                        ? "bg-gold text-ink"
-                        : "bg-white/5 text-stone-300 hover:bg-white/10",
+                        ? "font-bold text-white"
+                        : "text-[#b3b3b3] hover:text-[#e5e5e5]",
                     )}
                   >
                     {item.label}
@@ -131,7 +129,7 @@ export function TeacherShell({
                 );
               })}
             </nav>
-            <Button variant="ghost" className="h-10 self-end md:self-auto" onClick={logout}>
+            <Button variant="ghost" className="h-9 self-end md:self-auto" onClick={logout}>
               로그아웃
             </Button>
           </div>
@@ -158,16 +156,14 @@ function SessionLink({
       href={href}
       onClick={onClick}
       className={cn(
-        "block rounded-xl px-3 py-2.5 text-[13px] transition",
+        "block rounded-[2px] px-3 py-2 text-[13px] transition duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
         active
-          ? "bg-gold/15 text-gold-bright ring-1 ring-gold/30"
-          : "text-stone-400 hover:bg-white/5 hover:text-stone-200",
+          ? "bg-[#2f2f2f] text-white"
+          : "text-[#b3b3b3] hover:z-[2] hover:scale-[1.03] hover:bg-[#1f1f1f] hover:text-white",
       )}
     >
-      <span className="block font-medium tracking-tight">{session.label}</span>
-      <span className="mt-0.5 block text-[11px] text-stone-500">
-        {session.subjectName}
-      </span>
+      <span className="block font-bold tracking-tight">{session.label}</span>
+      <span className="mt-0.5 block text-[11px] text-[#808080]">{session.subjectName}</span>
     </Link>
   );
 }

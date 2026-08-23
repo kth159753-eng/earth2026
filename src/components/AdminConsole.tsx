@@ -45,8 +45,13 @@ export function AdminConsole({
 
   return (
     <div className="mx-auto w-full max-w-7xl px-3 py-5 sm:px-5">
-      <p className="text-[11px] tracking-[0.22em] text-gold/70">ADMIN</p>
-      <h1 className="mt-1 text-2xl font-semibold">{sessionLabel}</h1>
+      <p className="flex items-center gap-1.5 text-[13px] font-bold tracking-[0.28em]">
+        <b className="text-[22px] font-black tracking-[-0.08em] text-[#e50914]">E</b>
+        ADMIN
+      </p>
+      <h1 className="mt-1 font-serif text-[40px] font-bold leading-none tracking-[-0.05em]">
+        {sessionLabel}
+      </h1>
       <p className="mt-1 text-sm text-stone-400">
         학급 설정, 제출 현황, 정답·배점, 비교를 한 화면에서 관리합니다.
       </p>
@@ -65,8 +70,8 @@ export function AdminConsole({
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "rounded-full px-4 py-2 text-sm",
-              tab === id ? "bg-gold text-ink" : "bg-white/5 text-stone-300",
+              "rounded-[4px] px-4 py-2 text-sm",
+              tab === id ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
             )}
           >
             {label}
@@ -154,7 +159,7 @@ function ClassSettings({
   }
 
   return (
-    <section className="rounded-3xl border border-white/8 bg-[#10141b] p-5">
+    <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
       <SectionTitle kicker="CLASSROOM" title="학년 · 학급 · 학생 수" />
       <div className="flex flex-wrap gap-2">
         {[1, 2, 3].map((grade) => (
@@ -163,8 +168,8 @@ function ClassSettings({
             type="button"
             onClick={() => toggleGrade(grade)}
             className={cn(
-              "rounded-full px-4 py-2 text-sm",
-              enabled[grade] ? "bg-gold text-ink" : "bg-white/5 text-stone-400",
+              "rounded-[4px] px-4 py-2 text-sm",
+              enabled[grade] ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-400",
             )}
           >
             {gradeLabel(grade)}
@@ -174,7 +179,7 @@ function ClassSettings({
 
       <div className="mt-6 space-y-6">
         {[1, 2, 3].filter((grade) => enabled[grade]).map((grade) => (
-          <div key={grade} className="rounded-2xl border border-white/8 p-4">
+          <div key={grade} className="rounded-[4px] border border-white/8 p-4">
             <div className="flex flex-wrap items-end gap-3">
               <label>
                 <span className="mb-1 block text-xs text-stone-500">{gradeLabel(grade)} 학급 수</span>
@@ -184,7 +189,7 @@ function ClassSettings({
                   max={15}
                   value={classCount[grade]}
                   onChange={(event) => changeClassCount(grade, Number(event.target.value))}
-                  className="h-11 w-28 rounded-xl border border-white/10 bg-black/30 px-3"
+                  className="h-11 w-28 rounded-[4px] border border-white/10 bg-black/30 px-3"
                 />
               </label>
               <label>
@@ -195,7 +200,7 @@ function ClassSettings({
                   max={40}
                   value={bulk}
                   onChange={(event) => setBulk(Number(event.target.value))}
-                  className="h-11 w-28 rounded-xl border border-white/10 bg-black/30 px-3"
+                  className="h-11 w-28 rounded-[4px] border border-white/10 bg-black/30 px-3"
                 />
               </label>
               <Button
@@ -218,7 +223,7 @@ function ClassSettings({
               {Array.from({ length: classCount[grade] }, (_, index) => {
                 const classNumber = index + 1;
                 return (
-                  <label key={classNumber} className="rounded-xl bg-black/25 p-3">
+                  <label key={classNumber} className="rounded-[4px] bg-black/25 p-3">
                     <span className="block text-xs text-stone-500">{classLabel(classNumber)}</span>
                     <input
                       type="number"
@@ -309,7 +314,7 @@ function AnswerEditor({
   }
 
   return (
-    <section className="rounded-3xl border border-white/8 bg-[#10141b] p-5">
+    <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
       <SectionTitle
         kicker="ANSWER KEY"
         title="정답과 배점"
@@ -331,7 +336,7 @@ function AnswerEditor({
           <tbody>
             {Array.from({ length: QUESTION_COUNT }, (_, question) => (
               <tr key={question} className="border-t border-white/5">
-                <td className="py-2 text-gold-bright">{question + 1}</td>
+                <td className="py-2 text-white">{question + 1}</td>
                 {Array.from({ length: CHOICE_COUNT }, (_, choice) => {
                   const value = choice + 1;
                   return (
@@ -346,9 +351,9 @@ function AnswerEditor({
                           })
                         }
                         className={cn(
-                          "h-9 w-9 rounded-full border text-xs",
+                          "h-9 w-9 rounded-[4px] border text-xs",
                           answers[question] === value
-                            ? "border-gold bg-gold text-ink"
+                            ? "border-[#e50914] bg-[#e50914] text-white"
                             : "border-white/15 text-stone-400",
                         )}
                       >
@@ -441,9 +446,9 @@ function OmrBoard({
               type="button"
               onClick={() => setSelected(keyOf(item))}
               className={cn(
-                "rounded-full px-3 py-1.5 text-sm",
+                "rounded-[4px] px-3 py-1.5 text-sm",
                 current && keyOf(item) === keyOf(current)
-                  ? "bg-gold text-ink"
+                  ? "bg-[#e50914] text-white"
                   : "bg-white/5 text-stone-300",
               )}
             >
@@ -467,13 +472,13 @@ function OmrBoard({
         <Stat label="채점 완료" value={`${current?.summary.graded ?? 0}명`} />
       </div>
 
-      <div className="rounded-3xl border border-white/8 bg-[#10141b] p-4">
+      <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4">
         <p className="mb-3 text-sm text-stone-400">문항별 오답률</p>
         <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
           {heatmap.map((item) => (
             <div
               key={item.question}
-              className="rounded-xl p-2 text-center"
+              className="rounded-[4px] p-2 text-center"
               style={{ background: `rgba(196, 92, 74, ${0.08 + item.rate / 140})` }}
             >
               <p className="text-xs text-stone-400">{item.question}</p>
@@ -483,7 +488,7 @@ function OmrBoard({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-3xl border border-white/8">
+      <div className="overflow-x-auto rounded-[4px] border border-white/8">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-white/3 text-stone-500">
             <tr>
@@ -500,7 +505,7 @@ function OmrBoard({
                 <td className="px-4 py-3 text-stone-400">
                   {row.submitted ? "제출" : "미제출"}
                 </td>
-                <td className="px-4 py-3 font-medium text-gold-bright">
+                <td className="px-4 py-3 font-medium text-white">
                   {formatScore(row.score)}
                 </td>
                 <td className="px-4 py-3">
@@ -563,9 +568,9 @@ function CompareBoard({ dashboard }: { dashboard: DashboardClass[] }) {
               : averages.reduce((sum, value) => sum + value, 0) / averages.length;
           const submitted = rows.reduce((sum, row) => sum + row.submitted, 0);
           return (
-            <div key={grade} className="rounded-3xl border border-white/8 bg-[#10141b] p-5">
+            <div key={grade} className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
               <p className="text-sm text-stone-400">{gradeLabel(grade)}</p>
-              <p className="mt-2 text-3xl font-semibold text-gold-bright">
+              <p className="mt-2 text-3xl font-semibold text-white">
                 {formatScore(mean)}
               </p>
               <p className="mt-1 text-xs text-stone-500">제출 {submitted}명</p>
@@ -574,7 +579,7 @@ function CompareBoard({ dashboard }: { dashboard: DashboardClass[] }) {
         })}
       </div>
 
-      <div className="rounded-3xl border border-white/8 bg-[#10141b] p-5">
+      <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
         <SectionTitle title="학급 평균 비교" />
         <div className="space-y-3">
           {dashboard.map((item) => {
@@ -585,12 +590,12 @@ function CompareBoard({ dashboard }: { dashboard: DashboardClass[] }) {
                   <span>
                     {gradeLabel(item.grade)} {classLabel(item.classNumber)}
                   </span>
-                  <span className="text-gold-bright">
+                  <span className="text-white">
                     {formatScore(item.summary.average)}
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white/5">
-                  <div className="h-full rounded-full bg-gold" style={{ width: `${width}%` }} />
+                <div className="h-2 overflow-hidden rounded-[4px] bg-white/5">
+                  <div className="h-full rounded-[4px] bg-[#e50914]" style={{ width: `${width}%` }} />
                 </div>
               </div>
             );
@@ -603,7 +608,7 @@ function CompareBoard({ dashboard }: { dashboard: DashboardClass[] }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-[#10141b] px-4 py-4">
+    <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] px-4 py-4">
       <p className="text-xs text-stone-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-stone-100">{value}</p>
     </div>

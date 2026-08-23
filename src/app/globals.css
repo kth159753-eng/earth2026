@@ -1,17 +1,39 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 @import "tailwindcss";
 
 @theme inline {
-  --color-void: #07090d;
-  --color-ink: #1a140c;
-  --color-gold: #d4af78;
-  --color-gold-bright: #f0d9a8;
-  --color-teal: #8bb8a8;
+  --color-void: #141414;
+  --color-ink: #000000;
+  --color-gold: #e50914;
+  --color-gold-bright: #ffffff;
+  --color-teal: #46d369;
+  --color-nf-red: #e50914;
+  --color-nf-canvas: #141414;
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
 }
 
 :root {
   color-scheme: dark;
+  --color-primary-500: #e50914;
+  --color-primary-600: #c00710;
+  --color-primary-700: #95050c;
+  --bg-base: #141414;
+  --bg-subtle: #1f1f1f;
+  --bg-elevated: #2f2f2f;
+  --bg-overlay: rgba(0, 0, 0, 0.85);
+  --text-primary: #ffffff;
+  --text-secondary: #b3b3b3;
+  --text-tertiary: #808080;
+  --border-default: #333333;
+  --border-strong: #555555;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.7);
+  --shadow-xl: 0 24px 60px rgba(229, 9, 20, 0.4);
+  --duration-base: 250ms;
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -21,12 +43,13 @@
 html,
 body {
   min-height: 100%;
-  background: #07090d;
-  color: #e8e4dc;
+  background: #141414;
+  color: #ffffff;
 }
 
 body {
-  font-family: var(--font-sans), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-family: var(--font-sans), "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic",
+    Helvetica Neue, sans-serif;
   text-rendering: optimizeLegibility;
 }
 
@@ -43,14 +66,13 @@ select {
 }
 
 ::selection {
-  background: rgba(212, 175, 120, 0.28);
+  background: rgba(229, 9, 20, 0.35);
 }
 
 .glass {
-  background: rgba(16, 20, 27, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  background: #1f1f1f;
+  border: 1px solid #333;
+  box-shadow: var(--shadow-lg);
 }
 
 .starfield {
@@ -58,25 +80,27 @@ select {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.35), transparent),
-    radial-gradient(1px 1px at 28% 72%, rgba(255, 255, 255, 0.22), transparent),
-    radial-gradient(1px 1px at 61% 34%, rgba(240, 217, 168, 0.28), transparent),
-    radial-gradient(1px 1px at 81% 64%, rgba(255, 255, 255, 0.18), transparent),
-    radial-gradient(1.5px 1.5px at 44% 12%, rgba(255, 255, 255, 0.2), transparent),
-    linear-gradient(180deg, #07090d 0%, #0b1018 52%, #07090d 100%);
+    radial-gradient(circle at 72% 38%, rgba(229, 9, 20, 0.48) 0 6%, transparent 7%),
+    linear-gradient(104deg, #080808 0 37%, rgba(8, 8, 8, 0.48) 58%, rgba(8, 8, 8, 0.08) 75%),
+    linear-gradient(145deg, #280306 0 46%, #6f0910 47% 64%, #080808 65%);
+}
+
+.starfield::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent 31%, #141414 100%);
 }
 
 .vignette {
   pointer-events: none;
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, 0.72) 100%);
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.78) 100%);
 }
 
 .clock-glow {
-  text-shadow:
-    0 0 12px rgba(212, 175, 120, 0.45),
-    0 0 42px rgba(212, 175, 120, 0.18);
+  text-shadow: 0 6px 30px #000, 0 0 24px rgba(229, 9, 20, 0.18);
 }
 
 .alarm-flash {
@@ -86,11 +110,22 @@ select {
 @keyframes alarm {
   0%,
   100% {
-    box-shadow: inset 0 0 0 1px rgba(196, 92, 74, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(229, 9, 20, 0.25);
   }
   50% {
-    box-shadow: inset 0 0 80px rgba(196, 92, 74, 0.28);
+    box-shadow: inset 0 0 80px rgba(229, 9, 20, 0.35);
   }
+}
+
+.nf-progress {
+  height: 3px;
+  background: #555;
+}
+
+.nf-progress > span {
+  display: block;
+  height: 100%;
+  background: #e50914;
 }
 
 .h-13 {

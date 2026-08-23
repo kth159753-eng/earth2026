@@ -1,18 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_KR, Orbitron } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const sans = Noto_Sans_KR({
+const sans = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800", "900"],
   variable: "--font-sans",
-  display: "swap",
-});
-
-const display = Orbitron({
-  subsets: ["latin"],
-  weight: ["500", "700"],
-  variable: "--font-display",
   display: "swap",
 });
 
@@ -24,16 +17,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#07090d",
+  themeColor: "#141414",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="ko"
-      className={`${sans.variable} ${display.variable} h-full antialiased`}
-    >
-      <body className="min-h-full bg-void font-sans text-stone-100">{children}</body>
+    <html lang="ko" className={`${sans.variable} h-full antialiased`}>
+      <body className="min-h-full bg-void font-sans text-white">{children}</body>
     </html>
   );
 }
