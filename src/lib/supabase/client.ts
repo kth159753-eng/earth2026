@@ -1,8 +1,9 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { supabasePublicKey, supabaseUrl } from "@/lib/supabase/env";
 
 export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = supabaseUrl();
+  const key = supabasePublicKey();
   if (!url || !key) {
     throw new Error("Supabase 환경 변수가 없습니다.");
   }
