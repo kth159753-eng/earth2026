@@ -74,7 +74,7 @@ export function LoginForm() {
             autoComplete="username"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
-            placeholder="teacher01"
+            placeholder="아이디"
             required
           />
         </Field>
@@ -170,7 +170,7 @@ export function SignupForm() {
         return;
       }
       if (!data.session) {
-        setInfo("가입이 접수되었습니다. 메일함에서 인증을 완료해 주세요. 인증 메일이 없다면 Supabase에서 Confirm email을 끄면 바로 들어갑니다.");
+        setInfo("가입이 접수되었습니다. 메일함을 확인해 주세요.");
         return;
       }
       router.replace("/admin/");
@@ -191,7 +191,7 @@ export function SignupForm() {
           <TextField
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
-            placeholder="홍길동"
+            placeholder="이름"
             required
           />
         </Field>
@@ -200,7 +200,7 @@ export function SignupForm() {
             autoComplete="username"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
-            placeholder="earth_teacher"
+            placeholder="아이디"
             required
           />
         </Field>
@@ -210,7 +210,7 @@ export function SignupForm() {
             autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="teacher@school.kr"
+            placeholder="이메일"
             required
           />
         </Field>

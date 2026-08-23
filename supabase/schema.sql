@@ -1,7 +1,5 @@
--- EARTH 2026 · 지구과학 실전 모의고사
--- Supabase SQL Editor에 이 파일 전체를 붙여 넣고 Run 하세요.
--- 학생은 이름 없이 학년/반/번호로만 식별합니다.
--- 교사 이메일은 auth.users에만 저장되며, 화면과 공개 API에 노출되지 않습니다.
+-- EARTH 2026 classroom exam schema
+-- Paste this file into the SQL Editor and run it.
 
 create extension if not exists pgcrypto;
 
@@ -113,7 +111,7 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ---------------------------------------------------------------------------
--- 공개 RPC · 개인정보 미포함
+-- 공개 RPC
 -- ---------------------------------------------------------------------------
 
 create or replace function public.is_username_available(p_username text)

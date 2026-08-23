@@ -1,16 +1,23 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
-const ALLOWED_ORIGINS = [
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-  "https://kth159753-eng.github.io",
-];
+function allowedOrigin(origin: string | null) {
+  if (!origin) return null;
+  if (origin === "http://localhost:3000" || origin === "http://127.0.0.1:3000") {
+    return origin;
+  }
+  try {
+    const host = new URL(origin).hostname;
+    if (host === "github.io" || host.endsWith(".github.io")) return origin;
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function corsHeaders(origin: string | null) {
-  const allow =
-    origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[2];
+  const allow = allowedOrigin(origin);
   return {
-    "Access-Control-Allow-Origin": allow,
+    ...(allow ? { "Access-Control-Allow-Origin": allow } : {}),
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -58,7 +65,7 @@ Deno.serve(async (request) => {
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (!supabaseUrl || !serviceRole || !anonKey) {
-    return json({ ok: false, message: "함수 설정이 필요합니다." }, 500, origin);
+    return json({ ok: false, message: "잠시 후 다시 시도해 주세요." }, 500, origin);
   }
 
   const admin = createClient(supabaseUrl, serviceRole, {
