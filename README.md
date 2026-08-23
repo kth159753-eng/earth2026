@@ -1,69 +1,109 @@
 # EARTH 2026 · 지구과학 실전 모의고사
 
-교실 화면에 띄워 진행하는 지구과학 모의고사 시스템입니다. 교사는 아이디로 로그인하고, 학생은 이름 없이 학년·반·번호와 QR만으로 답을 제출합니다.
+교실 화면용 지구과학 모의고사입니다. GitHub Pages 주소는
+[https://kth159753-eng.github.io/earth2026/](https://kth159753-eng.github.io/earth2026/) 입니다.
 
-## 바로 시작
+GitHub에는 **정적 파일과 anon 공개키만** 올라갑니다. `service_role` 키, `.env.local`, 교사 이메일, 학생 이름은 저장소에 넣지 않습니다.
 
-1. [Supabase](https://supabase.com) 프로젝트를 만듭니다.
-2. SQL Editor에서 `supabase/schema.sql` 전체를 실행합니다.
-3. Authentication → Providers → Email에서 **Confirm email**은 교실용이면 끄는 것을 권장합니다.
-4. Authentication → URL Configuration에 아래를 추가합니다.
-   - `http://localhost:3000/**`
-   - 배포 주소 `https://내주소/**`
-5. 프로젝트 루트에 `.env.local`을 만들고 `.env.example`을 참고해 값을 넣습니다.
+## 절대 올리면 안 되는 것
+
+| 항목 | 위치 | GitHub |
+| --- | --- | --- |
+| `service_role` 키 | Supabase 대시보드에만 존재 | 금지. Secrets에도 넣지 말 것 |
+| `.env.local` | 본인 컴퓨터에만 | 금지. `.gitignore`로 차단됨 |
+| 교사 이메일·비밀번호 | Supabase Auth에만 | 금지 |
+| 학생 이름 | 수집하지 않음 | - |
+
+`anon public` 키는 웹사이트 JavaScript에 들어갑니다. 이것은 Supabase가 정한 공개키입니다. 데이터 보호는 SQL의 Row Level Security가 합니다.
+
+## 최종 절차
+
+SQL은 이미 실행했다면 1번은 건너뛰면 됩니다.
+
+### 1. Supabase SQL
+
+SQL Editor에서 `supabase/schema.sql` 전체를 실행합니다.
+
+### 2. Supabase 인증 주소
+
+**Authentication → URL Configuration**
+
+- Site URL: `https://kth159753-eng.github.io/earth2026`
+- Redirect URLs
+  - `https://kth159753-eng.github.io/earth2026/**`
+  - `https://kth159753-eng.github.io/earth2026/reset-password/`
+  - `http://localhost:3000/**`
+
+**Authentication → Providers → Email**에서 교실용이면 Confirm email을 끕니다.
+
+### 3. 아이디 로그인 함수 (비밀키는 여기에만)
+
+GitHub가 아니라 **Supabase Edge Function**이 `service_role`을 사용합니다. 이메일 주소는 브라우저로 내려가지 않습니다.
+
+1. Supabase → **Edge Functions** → **Create function**
+2. 이름: `teacher-login` (철자 그대로)
+3. `supabase/functions/teacher-login/index.ts` 내용을 붙여 넣고 Deploy
+4. JWT 검증은 켜 두어도 됩니다. 사이트는 anon 키로 호출합니다.
+
+CLI를 쓰는 경우:
+
+```bash
+npx supabase login
+npx supabase functions deploy teacher-login --project-ref 프로젝트REF
+```
+
+### 4. 로컬에서만 쓰는 키 파일
+
+프로젝트 폴더에 `.env.local`을 **직접** 만들고 아래만 넣습니다. 이 파일은 GitHub에 올리지 않습니다.
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+NEXT_PUBLIC_SUPABASE_URL=https://프로젝트.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=anon_public_키
+NEXT_PUBLIC_BASE_PATH=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY`는 서버에서만 쓰입니다. 프론트 코드나 학생 화면에 넣지 마세요.
+`service_role`은 여기에 넣지 않습니다.
 
 ```bash
 npm install
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3000` → 회원가입 → 관리자 페이지에서 학년·학급 저장.
+브라우저에서 `http://localhost:3000` → 회원가입 → 관리자에서 학년·학급 저장.
+
+### 5. GitHub Secrets (공개키 두 개만)
+
+저장소 **Settings → Secrets and variables → Actions**에 이것만 추가합니다.
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+`SUPABASE_SERVICE_ROLE_KEY`를 넣으면 배포가 일부러 실패합니다.
+
+### 6. GitHub Pages를 Actions로 바꿉니다
+
+1. 저장소 **Settings → Pages → Build and deployment → Source**를 **GitHub Actions**로 변경
+2. `main`에 이 프로젝트를 푸시
+3. **Actions**에서 `Deploy GitHub Pages`가 초록색이면
+   [https://kth159753-eng.github.io/earth2026/](https://kth159753-eng.github.io/earth2026/) 에서 로그인합니다.
+
+지금 주소에 README만 보이면, Pages 소스가 아직 “브랜치의 파일”로 되어 있는 상태입니다. Actions로 바꾸면 앱이 열립니다.
 
 ## 수업 흐름
 
-1. **관리자 페이지**에서 학년(1~3), 학급 수(1~15), 학생 수(1~40)를 저장합니다.
-2. 왼쪽에서 회차를 고릅니다. 표기는 `2025_3월_지I`, `2025_5월_지II` 형식입니다.
-3. **실전 모의고사**에서 시간을 맞추고 시작합니다. 학년·반을 바꾸면 QR이 그 학급 전용으로 바뀝니다.
-4. 학생은 QR을 찍어 1~20번 답을 제출합니다. 이름은 받지 않습니다.
-5. **시험문제 & 정답지**는 왼쪽 시험지, 오른쪽 해설지입니다. 파일을 올리거나 아래 폴더에 넣으면 됩니다.
-6. 관리자에서 정답·배점을 입력한 뒤 **채점**을 누르면 틀린 문항이 바로 보입니다.
+1. 관리자에서 학년(1~3), 학급(1~15), 학생 수(1~40)를 저장
+2. 왼쪽에서 `2025_3월_지I` 같은 회차를 선택
+3. 실전 모의고사에서 시간 설정 후 시작. 학년·반마다 QR이 다릅니다
+4. 학생은 QR → 번호만 고르고 1~20번 제출 (이름 없음)
+5. 시험문제 & 정답지는 왼쪽 시험지, 오른쪽 해설지
+6. 정답·배점 입력 후 채점, 학년·학급 비교
 
-시험지 파일 위치:
+시험지를 폴더에 넣을 때:
 
 ```
 public/exams/2025_3월_지I/paper.pdf
 public/exams/2025_3월_지I/solution.pdf
 ```
 
-## 개인정보
-
-- 학생 이름은 저장하지 않습니다. 식별자는 학년 / 반 / 번호뿐입니다.
-- 교사 이메일은 비밀번호 찾기에만 쓰이며 `auth.users`에만 남습니다. 프로필 테이블과 화면에는 이름·아이디만 둡니다.
-- 학생용 RPC는 교사 정보와 점수를 돌려주지 않습니다.
-- Row Level Security로 교사는 본인 학급 데이터만 봅니다.
-
-## SQL
-
-실행 파일은 `supabase/schema.sql`입니다. 만드는 대상은 다음과 같습니다.
-
-| 대상 | 역할 |
-| --- | --- |
-| `profiles` | 교사 이름, 아이디 |
-| `class_configs` | 학년·반·학생 수 |
-| `answer_keys` | 회차별 정답 20개, 배점 20개 |
-| `exam_assets` | 업로드한 시험지/해설지 경로 |
-| `omr_codes` | 학년·반·회차별 고유 QR 코드 |
-| `submissions` | 번호별 답안, 점수, 틀린 문항 |
-| `is_username_available` | 가입 시 아이디 중복 확인 |
-| `get_omr_meta` | 학생 화면에 회차·학년·반만 전달 |
-| `submit_omr` | 학생 답안 제출 |
-| `exam-files` 버킷 | 시험지 파일 저장 |
+또는 로그인 후 화면에서 업로드합니다.

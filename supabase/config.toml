@@ -1,0 +1,2 @@
+[functions.teacher-login]
+verify_jwt = true

@@ -1,10 +1,10 @@
 "use client";
 
 import { BrandMark, Button, Field, Notice, TextField } from "@/components/ui";
+import { loginWithUsername } from "@/lib/auth";
+import { isSupabaseConfigured, siteUrl } from "@/lib/config";
 import { createClient } from "@/lib/supabase/client";
 import {
-  isSupabaseConfigured,
-  siteUrl,
   validateName,
   validatePassword,
   validateUsername,
@@ -56,18 +56,12 @@ export function LoginForm() {
     }
     setPending(true);
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = (await response.json()) as { ok?: boolean; message?: string };
+      const data = await loginWithUsername(username, password);
       if (!data.ok) {
         setError(data.message || "로그인에 실패했습니다.");
         return;
       }
-      router.replace("/exam/2025-03-I");
-      router.refresh();
+      router.replace("/exam/2025-03-I/");
     } catch {
       setError("네트워크 오류가 발생했습니다.");
     } finally {
@@ -171,7 +165,7 @@ export function SignupForm() {
             username: username.trim().toLowerCase(),
             full_name: fullName.trim(),
           },
-          emailRedirectTo: `${siteUrl()}/exam/2025-03-I`,
+          emailRedirectTo: `${siteUrl()}/exam/2025-03-I/`,
         },
       });
       if (signError) {
@@ -182,8 +176,7 @@ export function SignupForm() {
         setInfo("가입이 접수되었습니다. 메일함에서 인증을 완료해 주세요.");
         return;
       }
-      router.replace("/admin");
-      router.refresh();
+      router.replace("/admin/");
     } catch {
       setError("네트워크 오류가 발생했습니다.");
     } finally {
@@ -273,7 +266,7 @@ export function ForgotPasswordForm() {
       const supabase = createClient();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
-        { redirectTo: `${siteUrl()}/reset-password` },
+        { redirectTo: `${siteUrl()}/reset-password/` },
       );
       if (resetError) {
         setError("메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -343,8 +336,7 @@ export function ResetPasswordForm() {
         setError("재설정 세션이 만료되었습니다. 메일을 다시 받아 주세요.");
         return;
       }
-      router.replace("/exam/2025-03-I");
-      router.refresh();
+      router.replace("/exam/2025-03-I/");
     } catch {
       setError("네트워크 오류가 발생했습니다.");
     } finally {

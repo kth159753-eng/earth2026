@@ -3,7 +3,9 @@
 import { ensureOmrCode } from "@/lib/actions/teacher";
 import type { ExamSession } from "@/lib/exams";
 import type { ClassConfig } from "@/lib/types";
+import { omrUrl as buildOmrUrl } from "@/lib/config";
 import { classLabel, cn, formatClock, gradeLabel } from "@/lib/utils";
+import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -30,7 +32,7 @@ export function ExamHall({ session, classes }: Props) {
   const [remaining, setRemaining] = useState(30 * 60);
   const [running, setRunning] = useState(false);
   const [alarm, setAlarm] = useState(false);
-  const [origin, setOrigin] = useState("");
+  const [omrUrl, setOmrUrl] = useState("");
   const endAt = useRef<number | null>(null);
 
   useEffect(() => {
@@ -56,8 +58,8 @@ export function ExamHall({ session, classes }: Props) {
   }, [session.id, grade, classNumber, classes.length]);
 
   useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
+    setOmrUrl(code ? buildOmrUrl(code) : "");
+  }, [code]);
 
   useEffect(() => {
     const tick = () => {
@@ -83,8 +85,6 @@ export function ExamHall({ session, classes }: Props) {
   const display = formatClock(remaining);
   const total = Math.max(1, hours * 3600 + minutes * 60 + seconds);
   const progress = Math.min(1, remaining / total);
-  const omrUrl = code && origin ? `${origin}/omr/${code}` : "";
-
   function applyDuration() {
     const next = hours * 3600 + minutes * 60 + seconds;
     setRemaining(next);
@@ -198,9 +198,9 @@ export function ExamHall({ session, classes }: Props) {
             {classes.length === 0 ? (
               <p className="text-sm leading-6 text-stone-400">
                 관리자 페이지에서 학년과 학급을 먼저 설정하면 학급별 QR이 생성됩니다.{" "}
-                <a href={`/admin?session=${session.id}`} className="text-gold-bright underline">
+                <Link href={`/admin/?session=${session.id}`} className="text-gold-bright underline">
                   설정하기
-                </a>
+                </Link>
               </p>
             ) : (
               <>

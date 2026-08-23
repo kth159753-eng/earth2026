@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandMark, Button } from "@/components/ui";
+import { logoutTeacher } from "@/lib/auth";
 import { EXAM_SESSIONS, groupSessionsByYear, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -26,8 +27,8 @@ function sessionFromPath(pathname: string) {
 }
 
 function hrefFor(section: string, sessionId: string) {
-  if (section === "admin") return `/admin?session=${sessionId}`;
-  return `/${section}/${sessionId}`;
+  if (section === "admin") return `/admin/?session=${sessionId}`;
+  return `/${section}/${sessionId}/`;
 }
 
 export function TeacherShell({
@@ -46,9 +47,8 @@ export function TeacherShell({
   const grouped = useMemo(() => groupSessionsByYear(), []);
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await logoutTeacher();
     router.replace("/");
-    router.refresh();
   }
 
   return (

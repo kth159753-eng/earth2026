@@ -37,20 +37,7 @@ export function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-export function siteUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
-}
-
-export function isSupabaseConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
-}
-
-export function hasServiceRole() {
-  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
-}
+export { isSupabaseConfigured, siteUrl } from "@/lib/config";
 
 export function gradeLabel(grade: number) {
   return `${grade}학년`;

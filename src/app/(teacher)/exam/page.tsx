@@ -1,6 +1,13 @@
+"use client";
+
 import { DEFAULT_SESSION_ID } from "@/lib/exams";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function ExamIndexPage() {
-  redirect(`/exam/${DEFAULT_SESSION_ID}`);
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(`/exam/${DEFAULT_SESSION_ID}/`);
+  }, [router]);
+  return <div className="min-h-dvh bg-void" />;
 }

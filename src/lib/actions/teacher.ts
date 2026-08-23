@@ -1,13 +1,10 @@
-"use server";
-
 import { nanoid } from "nanoid";
-import { revalidatePath } from "next/cache";
 import { QUESTION_COUNT, defaultPoints, emptyAnswers, getSession } from "@/lib/exams";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/client";
 import { clamp } from "@/lib/utils";
 
 async function requireTeacher() {
-  const supabase = await createClient();
+  const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -48,8 +45,6 @@ export async function saveClassConfigs(
     if (error) throw new Error("학급 설정을 저장하지 못했습니다.");
   }
 
-  revalidatePath("/admin");
-  revalidatePath("/exam", "layout");
   return { ok: true };
 }
 
@@ -78,8 +73,6 @@ export async function saveAnswerKey(
     { onConflict: "teacher_id,session_id" },
   );
   if (error) throw new Error("정답을 저장하지 못했습니다.");
-
-  revalidatePath("/admin");
   return { ok: true };
 }
 
@@ -124,7 +117,6 @@ export async function ensureOmrCode(
     throw new Error("QR 코드를 만들지 못했습니다.");
   }
 
-  revalidatePath(`/exam/${sessionId}`);
   return { code };
 }
 
@@ -184,7 +176,6 @@ export async function gradeSession(sessionId: string) {
     if (!updateError) graded += 1;
   }
 
-  revalidatePath("/admin");
   return { ok: true, graded };
 }
 
@@ -220,6 +211,5 @@ export async function saveExamAsset(
     if (error) throw new Error("파일을 연결하지 못했습니다.");
   }
 
-  revalidatePath(`/papers/${sessionId}`);
   return { ok: true };
 }

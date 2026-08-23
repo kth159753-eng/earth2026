@@ -12,7 +12,6 @@ import {
   gradeLabel,
   studentLabel,
 } from "@/lib/utils";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 type Tab = "classes" | "omr" | "answers" | "compare";
@@ -32,6 +31,7 @@ export function AdminConsole({
   initialAnswers,
   initialPoints,
   dashboard,
+  onReload,
 }: {
   sessionId: string;
   sessionLabel: string;
@@ -39,6 +39,7 @@ export function AdminConsole({
   initialAnswers: number[];
   initialPoints: number[];
   dashboard: DashboardClass[];
+  onReload?: () => void | Promise<void>;
 }) {
   const [tab, setTab] = useState<Tab>("omr");
 
@@ -74,16 +75,19 @@ export function AdminConsole({
       </div>
 
       <div className="mt-6">
-        {tab === "classes" ? <ClassSettings initial={classConfigs} /> : null}
+        {tab === "classes" ? (
+          <ClassSettings initial={classConfigs} onReload={onReload} />
+        ) : null}
         {tab === "answers" ? (
           <AnswerEditor
             sessionId={sessionId}
             initialAnswers={initialAnswers}
             initialPoints={initialPoints}
+            onReload={onReload}
           />
         ) : null}
         {tab === "omr" ? (
-          <OmrBoard sessionId={sessionId} dashboard={dashboard} />
+          <OmrBoard sessionId={sessionId} dashboard={dashboard} onReload={onReload} />
         ) : null}
         {tab === "compare" ? <CompareBoard dashboard={dashboard} /> : null}
       </div>
@@ -91,7 +95,13 @@ export function AdminConsole({
   );
 }
 
-function ClassSettings({ initial }: { initial: ClassConfig[] }) {
+function ClassSettings({
+  initial,
+  onReload,
+}: {
+  initial: ClassConfig[];
+  onReload?: () => void | Promise<void>;
+}) {
   const seeded = useMemo(() => seedSettings(initial), [initial]);
   const [enabled, setEnabled] = useState(seeded.enabled);
   const [classCount, setClassCount] = useState(seeded.classCount);
@@ -135,6 +145,7 @@ function ClassSettings({ initial }: { initial: ClassConfig[] }) {
     try {
       await saveClassConfigs(rows);
       setMessage("학급 설정을 저장했습니다.");
+      await onReload?.();
     } catch {
       setError("저장에 실패했습니다.");
     } finally {
@@ -268,10 +279,12 @@ function AnswerEditor({
   sessionId,
   initialAnswers,
   initialPoints,
+  onReload,
 }: {
   sessionId: string;
   initialAnswers: number[];
   initialPoints: number[];
+  onReload?: () => void | Promise<void>;
 }) {
   const [answers, setAnswers] = useState(initialAnswers.length ? initialAnswers : emptyAnswers());
   const [points, setPoints] = useState(initialPoints.length ? initialPoints : defaultPoints());
@@ -287,6 +300,7 @@ function AnswerEditor({
     try {
       await saveAnswerKey(sessionId, answers, points);
       setMessage("정답과 배점을 저장했습니다.");
+      await onReload?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "저장에 실패했습니다.");
     } finally {
@@ -376,11 +390,12 @@ function AnswerEditor({
 function OmrBoard({
   sessionId,
   dashboard,
+  onReload,
 }: {
   sessionId: string;
   dashboard: DashboardClass[];
+  onReload?: () => void | Promise<void>;
 }) {
-  const router = useRouter();
   const [selected, setSelected] = useState(dashboard[0] ? keyOf(dashboard[0]) : "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -404,7 +419,7 @@ function OmrBoard({
     try {
       const result = await gradeSession(sessionId);
       setMessage(`${result.graded}명의 답안을 채점했습니다.`);
-      router.refresh();
+      await onReload?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "채점에 실패했습니다.");
     } finally {

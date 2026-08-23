@@ -1,6 +1,5 @@
-import { cache } from "react";
 import { DEFAULT_SESSION_ID, defaultPoints, emptyAnswers } from "@/lib/exams";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/client";
 import type {
   AnswerKey,
   ClassConfig,
@@ -11,30 +10,30 @@ import type {
 } from "@/lib/types";
 import { average } from "@/lib/utils";
 
-export const getSessionUser = cache(async () => {
-  const supabase = await createClient();
+async function currentUser() {
+  const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user;
-});
+}
 
-export const getProfile = cache(async (): Promise<Profile | null> => {
-  const user = await getSessionUser();
+export async function getProfile(): Promise<Profile | null> {
+  const user = await currentUser();
   if (!user) return null;
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase
     .from("profiles")
     .select("id, username, full_name")
     .eq("id", user.id)
     .maybeSingle();
   return data;
-});
+}
 
-export const getClassConfigs = cache(async (): Promise<ClassConfig[]> => {
-  const user = await getSessionUser();
+export async function getClassConfigs(): Promise<ClassConfig[]> {
+  const user = await currentUser();
   if (!user) return [];
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase
     .from("class_configs")
     .select("id, teacher_id, grade, class_number, student_count")
@@ -42,12 +41,12 @@ export const getClassConfigs = cache(async (): Promise<ClassConfig[]> => {
     .order("grade", { ascending: true })
     .order("class_number", { ascending: true });
   return data ?? [];
-});
+}
 
 export async function getAnswerKey(sessionId: string): Promise<AnswerKey | null> {
-  const user = await getSessionUser();
+  const user = await currentUser();
   if (!user) return null;
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase
     .from("answer_keys")
     .select("id, teacher_id, session_id, answers, points")
@@ -68,9 +67,9 @@ export function fallbackAnswerKey(sessionId: string, teacherId: string): AnswerK
 }
 
 export async function getExamAssets(sessionId: string) {
-  const user = await getSessionUser();
+  const user = await currentUser();
   if (!user) return null;
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase
     .from("exam_assets")
     .select("paper_path, solution_path")
@@ -82,7 +81,7 @@ export async function getExamAssets(sessionId: string) {
 
 export async function getSignedAssetUrl(path: string | null) {
   if (!path) return null;
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase.storage
     .from("exam-files")
     .createSignedUrl(path, 60 * 30);
@@ -90,9 +89,9 @@ export async function getSignedAssetUrl(path: string | null) {
 }
 
 export async function getOmrCodes(sessionId: string) {
-  const user = await getSessionUser();
+  const user = await currentUser();
   if (!user) return [];
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase
     .from("omr_codes")
     .select("id, teacher_id, session_id, grade, class_number, code")
@@ -107,7 +106,7 @@ export async function getSubmissionsForSession(sessionId: string) {
     return { codes, submissions: [] as (Submission & { grade: number; class_number: number })[] };
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase
     .from("submissions")
     .select("id, omr_code_id, student_number, answers, score, wrong_questions, submitted_at")
