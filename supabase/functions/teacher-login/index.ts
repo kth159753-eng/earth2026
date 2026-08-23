@@ -51,7 +51,7 @@ Deno.serve(async (request) => {
   const username = payload.username?.trim().toLowerCase() ?? "";
   const password = payload.password ?? "";
   if (!/^[a-z0-9_]{4,20}$/.test(username) || password.length < 8) {
-    return json({ ok: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." }, 401, origin);
+    return json({ ok: false, message: "비밀번호가 틀렸습니다." }, 401, origin);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -72,7 +72,7 @@ Deno.serve(async (request) => {
     .maybeSingle();
 
   if (!profile) {
-    return json({ ok: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." }, 401, origin);
+    return json({ ok: false, message: "비밀번호가 틀렸습니다." }, 401, origin);
   }
 
   const { data: userData, error: userError } = await admin.auth.admin.getUserById(
@@ -80,7 +80,7 @@ Deno.serve(async (request) => {
   );
   const email = userData.user?.email;
   if (userError || !email) {
-    return json({ ok: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." }, 401, origin);
+    return json({ ok: false, message: "비밀번호가 틀렸습니다." }, 401, origin);
   }
 
   const anon = createClient(supabaseUrl, anonKey, {
@@ -88,7 +88,7 @@ Deno.serve(async (request) => {
   });
   const { data, error } = await anon.auth.signInWithPassword({ email, password });
   if (error || !data.session) {
-    return json({ ok: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." }, 401, origin);
+    return json({ ok: false, message: "비밀번호가 틀렸습니다." }, 401, origin);
   }
 
   return json(

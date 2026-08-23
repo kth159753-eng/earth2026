@@ -13,7 +13,7 @@ export async function loginWithUsername(
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
-    return { ok: false, message: "서버 설정이 완료되지 않았습니다." };
+    return { ok: false, message: genericAuthError() };
   }
 
   const response = await fetch(`${url}/functions/v1/teacher-login`, {

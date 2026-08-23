@@ -2,7 +2,8 @@
 
 import { BrandMark, Button, Field, Notice, TextField } from "@/components/ui";
 import { loginWithUsername } from "@/lib/auth";
-import { isSupabaseConfigured, siteUrl } from "@/lib/config";
+import { networkErrorMessage, signupErrorMessage } from "@/lib/auth-errors";
+import { siteUrl } from "@/lib/config";
 import { createClient } from "@/lib/supabase/client";
 import {
   validateName,
@@ -50,20 +51,16 @@ export function LoginForm() {
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
-    if (!isSupabaseConfigured()) {
-      setError("Supabase 환경 변수를 먼저 설정해 주세요.");
-      return;
-    }
     setPending(true);
     try {
       const data = await loginWithUsername(username, password);
       if (!data.ok) {
-        setError(data.message || "로그인에 실패했습니다.");
+        setError(data.message || "비밀번호가 틀렸습니다.");
         return;
       }
       router.replace("/exam/2025-03-I/");
     } catch {
-      setError("네트워크 오류가 발생했습니다.");
+      setError("비밀번호가 틀렸습니다.");
     } finally {
       setPending(false);
     }
@@ -149,7 +146,7 @@ export function SignupForm() {
         { p_username: username.trim() },
       );
       if (checkError) {
-        setError("아이디 확인에 실패했습니다. SQL 설정을 확인해 주세요.");
+        setError("아이디 확인에 실패했습니다. SQL Editor에서 schema.sql을 실행했는지 확인해 주세요.");
         return;
       }
       if (available === false) {
@@ -169,16 +166,16 @@ export function SignupForm() {
         },
       });
       if (signError) {
-        setError("회원가입에 실패했습니다. 이메일 형식을 확인해 주세요.");
+        setError(signupErrorMessage(signError));
         return;
       }
       if (!data.session) {
-        setInfo("가입이 접수되었습니다. 메일함에서 인증을 완료해 주세요.");
+        setInfo("가입이 접수되었습니다. 메일함에서 인증을 완료해 주세요. 인증 메일이 없다면 Supabase에서 Confirm email을 끄면 바로 들어갑니다.");
         return;
       }
       router.replace("/admin/");
-    } catch {
-      setError("네트워크 오류가 발생했습니다.");
+    } catch (error) {
+      setError(networkErrorMessage(error));
     } finally {
       setPending(false);
     }
@@ -273,8 +270,8 @@ export function ForgotPasswordForm() {
         return;
       }
       setInfo("입력하신 주소로 재설정 안내를 보냈습니다. 메일함을 확인해 주세요.");
-    } catch {
-      setError("네트워크 오류가 발생했습니다.");
+    } catch (error) {
+      setError(networkErrorMessage(error));
     } finally {
       setPending(false);
     }
@@ -337,8 +334,8 @@ export function ResetPasswordForm() {
         return;
       }
       router.replace("/exam/2025-03-I/");
-    } catch {
-      setError("네트워크 오류가 발생했습니다.");
+    } catch (error) {
+      setError(networkErrorMessage(error));
     } finally {
       setPending(false);
     }

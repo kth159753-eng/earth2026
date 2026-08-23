@@ -64,5 +64,5 @@ export function validatePassword(password: string) {
 }
 
 export function genericAuthError() {
-  return "아이디 또는 비밀번호가 올바르지 않습니다.";
+  return "비밀번호가 틀렸습니다.";
 }
