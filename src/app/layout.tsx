@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 
-const sans = Inter({
+const sans = Noto_Sans_KR({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
+  weight: ["400", "500", "700", "900"],
   variable: "--font-sans",
   display: "swap",
 });
@@ -23,7 +23,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className={`${sans.variable} h-full antialiased`}>
-      <body className="min-h-full bg-void font-sans text-white">{children}</body>
+      <body className={`${sans.className} min-h-full bg-void text-white`}>{children}</body>
     </html>
   );
 }

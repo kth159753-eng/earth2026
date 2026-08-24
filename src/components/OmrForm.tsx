@@ -60,7 +60,7 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
   return (
     <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-6">
       <p className="text-[11px] tracking-[0.28em] text-[#e50914]">EARTH 2026 OMR</p>
-      <h1 className="mt-2 font-serif text-[40px] font-bold leading-none tracking-[-0.05em]">
+      <h1 className="mt-2 text-[40px] font-bold leading-none tracking-[-0.03em]">
         {session?.label ?? "모의고사"}
       </h1>
       <p className="mt-1 text-sm text-stone-400">

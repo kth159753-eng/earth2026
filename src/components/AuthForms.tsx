@@ -36,7 +36,7 @@ function AuthShell({
             <b className="text-[22px] font-black tracking-[-0.08em] text-[#e50914]">E</b>
             시험
           </p>
-          <h1 className="mt-2 font-serif text-[40px] font-bold leading-[0.95] tracking-[-0.04em] text-white">
+          <h1 className="mt-2 text-[40px] font-bold leading-[0.95] tracking-[-0.03em] text-white">
             {title}
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#b3b3b3]">{subtitle}</p>

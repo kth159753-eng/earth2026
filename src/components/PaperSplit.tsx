@@ -23,13 +23,10 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
     <div className="mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-extrabold tracking-[0.22em] text-[#e50914]">PREVIEW</p>
-          <h1 className="font-serif text-[40px] font-bold leading-none tracking-[-0.05em]">
+          <h1 className="text-[40px] font-bold leading-none tracking-[-0.03em]">
             {session.label}
           </h1>
-          <p className="text-sm text-stone-400">
-            왼쪽은 시험지, 오른쪽은 해설지입니다. PDF 또는 이미지를 올리면 바로 보입니다.
-          </p>
+          <p className="mt-2 text-base text-[#d0d0d0]">{session.subjectName}</p>
         </div>
       </div>
       {error ? <div className="mb-4"><Notice tone="warn">{error}</Notice></div> : null}

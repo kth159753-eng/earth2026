@@ -9,8 +9,8 @@ export type ExamSession = {
   subjectName: string;
 };
 
-const MONTHS = [3, 5, 6, 7, 9, 10] as const;
-const SUBJECT_II_MONTHS = new Set([5, 6, 9, 10]);
+const MONTHS = [3, 5, 6, 7, 9, 10, 11] as const;
+const SUBJECT_II_MONTHS = new Set([5, 6, 7, 9, 10, 11]);
 
 function makeSession(
   year: number,
@@ -81,7 +81,7 @@ export function emptyAnswers(): number[] {
 }
 
 export function publicExamPaths(session: ExamSession) {
-  const folder = encodeURIComponent(session.label);
+  const folder = session.id;
   return {
     paper: `/exams/${folder}/paper.pdf`,
     solution: `/exams/${folder}/solution.pdf`,

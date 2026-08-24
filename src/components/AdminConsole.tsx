@@ -49,7 +49,7 @@ export function AdminConsole({
         <b className="text-[22px] font-black tracking-[-0.08em] text-[#e50914]">E</b>
         ADMIN
       </p>
-      <h1 className="mt-1 font-serif text-[40px] font-bold leading-none tracking-[-0.05em]">
+      <h1 className="mt-1 text-[40px] font-bold leading-none tracking-[-0.03em]">
         {sessionLabel}
       </h1>
       <p className="mt-1 text-sm text-stone-400">
@@ -100,6 +100,26 @@ export function AdminConsole({
   );
 }
 
+type ClassSlot = {
+  classNumber: number;
+  studentCount: number;
+};
+
+function defaultSlots(count: number, start = 1): ClassSlot[] {
+  return Array.from({ length: count }, (_, index) => ({
+    classNumber: Math.min(15, start + index),
+    studentCount: 30,
+  }));
+}
+
+function nextFreeClassNumber(slots: ClassSlot[]) {
+  const used = new Set(slots.map((slot) => slot.classNumber));
+  for (let number = 1; number <= 15; number += 1) {
+    if (!used.has(number)) return number;
+  }
+  return 15;
+}
+
 function ClassSettings({
   initial,
   onReload,
@@ -109,8 +129,7 @@ function ClassSettings({
 }) {
   const seeded = useMemo(() => seedSettings(initial), [initial]);
   const [enabled, setEnabled] = useState(seeded.enabled);
-  const [classCount, setClassCount] = useState(seeded.classCount);
-  const [students, setStudents] = useState(seeded.students);
+  const [slots, setSlots] = useState(seeded.slots);
   const [bulk, setBulk] = useState(30);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -122,31 +141,55 @@ function ClassSettings({
 
   function changeClassCount(grade: number, count: number) {
     const nextCount = Math.min(15, Math.max(1, count));
-    setClassCount((current) => ({ ...current, [grade]: nextCount }));
-    setStudents((current) => {
-      const next = { ...current, [grade]: { ...current[grade] } };
-      for (let index = 1; index <= nextCount; index += 1) {
-        next[grade][index] = next[grade][index] ?? 30;
+    setSlots((current) => {
+      const existing = current[grade] ?? [];
+      if (nextCount <= existing.length) {
+        return { ...current, [grade]: existing.slice(0, nextCount) };
       }
-      return next;
+      const added = [...existing];
+      while (added.length < nextCount) {
+        added.push({
+          classNumber: nextFreeClassNumber(added),
+          studentCount: added[added.length - 1]?.studentCount ?? 30,
+        });
+      }
+      return { ...current, [grade]: added };
+    });
+  }
+
+  function updateSlot(grade: number, index: number, patch: Partial<ClassSlot>) {
+    setSlots((current) => {
+      const next = [...(current[grade] ?? [])];
+      const prev = next[index];
+      if (!prev) return current;
+      next[index] = {
+        classNumber: patch.classNumber ?? prev.classNumber,
+        studentCount: patch.studentCount ?? prev.studentCount,
+      };
+      return { ...current, [grade]: next };
     });
   }
 
   async function save() {
     setError("");
     setMessage("");
-    setPending(true);
     const rows: Array<{ grade: number; classNumber: number; studentCount: number }> = [];
     for (const grade of [1, 2, 3]) {
       if (!enabled[grade]) continue;
-      for (let classNumber = 1; classNumber <= classCount[grade]; classNumber += 1) {
+      const names = (slots[grade] ?? []).map((slot) => slot.classNumber);
+      if (new Set(names).size !== names.length) {
+        setError(`${gradeLabel(grade)}에 같은 반 번호가 있습니다.`);
+        return;
+      }
+      for (const slot of slots[grade] ?? []) {
         rows.push({
           grade,
-          classNumber,
-          studentCount: students[grade][classNumber] ?? 30,
+          classNumber: slot.classNumber,
+          studentCount: slot.studentCount,
         });
       }
     }
+    setPending(true);
     try {
       await saveClassConfigs(rows);
       setMessage("학급 설정을 저장했습니다.");
@@ -160,7 +203,10 @@ function ClassSettings({
 
   return (
     <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
-      <SectionTitle kicker="CLASSROOM" title="학년 · 학급 · 학생 수" />
+      <SectionTitle title="학년 · 학급 · 학생 수" />
+      <p className="mb-4 text-sm text-[#808080]">
+        학급 수를 정한 뒤 반 번호를 바꿀 수 있습니다. 예: 5개 반을 3, 4, 5, 6, 7반으로.
+      </p>
       <div className="flex flex-wrap gap-2">
         {[1, 2, 3].map((grade) => (
           <button
@@ -187,7 +233,7 @@ function ClassSettings({
                   type="number"
                   min={1}
                   max={15}
-                  value={classCount[grade]}
+                  value={slots[grade]?.length ?? 1}
                   onChange={(event) => changeClassCount(grade, Number(event.target.value))}
                   className="h-11 w-28 rounded-[4px] border border-white/10 bg-black/30 px-3"
                 />
@@ -207,43 +253,57 @@ function ClassSettings({
                 variant="line"
                 className="h-11"
                 onClick={() => {
-                  setStudents((current) => {
-                    const next = { ...current, [grade]: { ...current[grade] } };
-                    for (let index = 1; index <= classCount[grade]; index += 1) {
-                      next[grade][index] = Math.min(40, Math.max(1, bulk));
-                    }
-                    return next;
-                  });
+                  const count = Math.min(40, Math.max(1, bulk));
+                  setSlots((current) => ({
+                    ...current,
+                    [grade]: (current[grade] ?? []).map((slot) => ({
+                      ...slot,
+                      studentCount: count,
+                    })),
+                  }));
                 }}
               >
                 일괄 적용
               </Button>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-              {Array.from({ length: classCount[grade] }, (_, index) => {
-                const classNumber = index + 1;
-                return (
-                  <label key={classNumber} className="rounded-[4px] bg-black/25 p-3">
-                    <span className="block text-xs text-stone-500">{classLabel(classNumber)}</span>
+              {(slots[grade] ?? []).map((slot, index) => (
+                <div key={`${grade}-${index}`} className="rounded-[4px] bg-black/25 p-3">
+                  <label>
+                    <span className="block text-xs text-stone-500">반 번호</span>
+                    <div className="mt-1 flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={15}
+                        value={slot.classNumber}
+                        onChange={(event) =>
+                          updateSlot(grade, index, {
+                            classNumber: Math.min(15, Math.max(1, Number(event.target.value) || 1)),
+                          })
+                        }
+                        className="h-10 w-full rounded-[4px] border border-white/10 bg-transparent px-2"
+                      />
+                      <span className="text-sm text-[#b3b3b3]">반</span>
+                    </div>
+                  </label>
+                  <label className="mt-2 block">
+                    <span className="block text-xs text-stone-500">학생 수</span>
                     <input
                       type="number"
                       min={1}
                       max={40}
-                      value={students[grade][classNumber] ?? 30}
+                      value={slot.studentCount}
                       onChange={(event) =>
-                        setStudents((current) => ({
-                          ...current,
-                          [grade]: {
-                            ...current[grade],
-                            [classNumber]: Math.min(40, Math.max(1, Number(event.target.value))),
-                          },
-                        }))
+                        updateSlot(grade, index, {
+                          studentCount: Math.min(40, Math.max(1, Number(event.target.value) || 1)),
+                        })
                       }
-                      className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-transparent px-2"
+                      className="mt-1 h-10 w-full rounded-[4px] border border-white/10 bg-transparent px-2"
                     />
                   </label>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -260,24 +320,31 @@ function ClassSettings({
 
 function seedSettings(initial: ClassConfig[]) {
   const enabled: Record<number, boolean> = { 1: false, 2: false, 3: true };
-  const classCount: Record<number, number> = { 1: 1, 2: 1, 3: 5 };
-  const students: Record<number, Record<number, number>> = {
-    1: {},
-    2: {},
-    3: { 1: 30, 2: 30, 3: 30, 4: 30, 5: 30 },
+  const slots: Record<number, ClassSlot[]> = {
+    1: defaultSlots(1),
+    2: defaultSlots(1),
+    3: defaultSlots(5),
   };
 
+  const grouped: Record<number, ClassSlot[]> = { 1: [], 2: [], 3: [] };
   for (const row of initial) {
     enabled[row.grade] = true;
-    classCount[row.grade] = Math.max(classCount[row.grade] ?? 1, row.class_number);
-    students[row.grade][row.class_number] = row.student_count;
+    grouped[row.grade].push({
+      classNumber: row.class_number,
+      studentCount: row.student_count,
+    });
+  }
+  for (const grade of [1, 2, 3]) {
+    if (grouped[grade].length > 0) {
+      slots[grade] = grouped[grade].sort((a, b) => a.classNumber - b.classNumber);
+    }
   }
 
   if (initial.length === 0) {
     enabled[3] = true;
   }
 
-  return { enabled, classCount, students };
+  return { enabled, slots };
 }
 
 function AnswerEditor({
@@ -316,7 +383,6 @@ function AnswerEditor({
   return (
     <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
       <SectionTitle
-        kicker="ANSWER KEY"
         title="정답과 배점"
         action={<p className="text-sm text-stone-400">총점 {total}점</p>}
       />

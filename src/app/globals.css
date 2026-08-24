@@ -1,4 +1,3 @@
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 @import "tailwindcss";
 
 @theme inline {
@@ -9,8 +8,8 @@
   --color-teal: #46d369;
   --color-nf-red: #e50914;
   --color-nf-canvas: #141414;
-  --font-sans: var(--font-sans);
-  --font-display: var(--font-display);
+  --font-sans: var(--font-sans), "Noto Sans KR", sans-serif;
+  --font-display: var(--font-sans), "Noto Sans KR", sans-serif;
 }
 
 :root {
@@ -48,8 +47,8 @@ body {
 }
 
 body {
-  font-family: var(--font-sans), "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic",
-    Helvetica Neue, sans-serif;
+  font-family: var(--font-sans), "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic",
+    sans-serif;
   text-rendering: optimizeLegibility;
 }
 
@@ -100,7 +99,9 @@ select {
 }
 
 .clock-glow {
-  text-shadow: 0 6px 30px #000, 0 0 24px rgba(229, 9, 20, 0.18);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-shadow: none;
 }
 
 .alarm-flash {
@@ -118,8 +119,8 @@ select {
 }
 
 .nf-progress {
-  height: 3px;
-  background: #555;
+  height: 8px;
+  background: #3d3d3d;
 }
 
 .nf-progress > span {

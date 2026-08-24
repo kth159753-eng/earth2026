@@ -1,7 +1,8 @@
-회차별 시험지와 해설지를 이 폴더에 넣으면 미리보기에 나타납니다.
+회차별 시험지와 해설지입니다.
+폴더 이름: 연도-월-과목  (I = 지구과학 I, II = 지구과학 II)
 
-예시:
-  public/exams/2025_3월_지I/paper.pdf
-  public/exams/2025_3월_지I/solution.pdf
-
-또는 로그인 후 [시험문제 & 정답지] 화면에서 직접 업로드할 수 있습니다.
+예:
+  public/exams/2025-03-I/paper.pdf
+  public/exams/2025-03-I/solution.pdf
+  public/exams/2025-06-II/paper.pdf
+  public/exams/2025-06-II/solution.pdf

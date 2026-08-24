@@ -117,11 +117,10 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
       <p className="text-[22px] font-black tracking-[-0.07em] text-[#e50914] sm:text-[26px]">
         EARTH
       </p>
-      <div className={cn(compact && "hidden sm:block")}>
-        <p className="text-[11px] font-semibold tracking-[0.16em] text-[#b3b3b3] uppercase">
-          2026
-        </p>
-        <p className="text-[11px] text-[#808080]">지구과학 실전 모의고사</p>
+      <div className={cn("leading-tight", compact && "hidden sm:block")}>
+        <p className="text-[11px] font-semibold text-[#b3b3b3]">2026</p>
+        <p className="text-[11px] text-[#808080]">지구과학</p>
+        <p className="text-[11px] text-[#808080]">실전 모의고사</p>
       </div>
     </div>
   );

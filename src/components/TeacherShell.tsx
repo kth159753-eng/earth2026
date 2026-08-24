@@ -87,7 +87,6 @@ export function TeacherShell({
             프로필
           </p>
           <p className="mt-1 truncate text-sm font-bold text-white">{profile.full_name}</p>
-          <p className="truncate text-xs text-[#808080]">{profile.username}</p>
         </div>
         {Object.entries(grouped).map(([year, sessions]) => (
           <div key={year} className="mb-4">

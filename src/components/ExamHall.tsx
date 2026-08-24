@@ -8,6 +8,7 @@ import { classLabel, cn, formatClock, gradeLabel } from "@/lib/utils";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   session: ExamSession;
@@ -111,75 +112,110 @@ export function ExamHall({ session, classes }: Props) {
     applyDuration();
   }
 
+  function enterFullscreen() {
+    const node = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
+    const request = node.requestFullscreen || node.webkitRequestFullscreen;
+    if (request) void Promise.resolve(request.call(node)).catch(() => undefined);
+  }
+
+  function leaveFullscreen() {
+    const doc = document as Document & {
+      webkitExitFullscreen?: () => Promise<void> | void;
+      webkitFullscreenElement?: Element | null;
+    };
+    const active = document.fullscreenElement || doc.webkitFullscreenElement;
+    const exit = document.exitFullscreen || doc.webkitExitFullscreen;
+    if (active && exit) void Promise.resolve(exit.call(document)).catch(() => undefined);
+  }
+
+  function toggleImmersive() {
+    if (immersive) {
+      setImmersive(false);
+      leaveFullscreen();
+      return;
+    }
+    setImmersive(true);
+    enterFullscreen();
+  }
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setImmersive(false);
+        leaveFullscreen();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function ClockFace() {
+    return (
+      <div
+        className={cn(
+          "clock-glow mx-auto font-black leading-none text-white",
+          remaining <= 60 && remaining > 0 && "text-[#e50914]",
+          alarm && "text-[#e50914]",
+        )}
+      >
+        {display.hours !== "00" ? `${display.hours}:` : null}
+        {display.minutes}:{display.seconds}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        "relative isolate min-h-[calc(100dvh-72px)] overflow-hidden bg-[#141414]",
-        immersive && "fixed inset-0 z-50 min-h-dvh",
-      )}
-    >
+    <div className="relative isolate min-h-[calc(100dvh-72px)] overflow-hidden bg-[#141414]">
       <div className="starfield" />
       <div className="vignette" />
 
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-[4%] py-6 lg:py-8">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="relative mx-auto flex h-full w-full max-w-[1400px] flex-col gap-4 px-[3%] py-4 lg:py-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="flex items-center gap-1.5 text-[13px] font-bold tracking-[0.28em]">
-              <b className="text-[22px] font-black tracking-[-0.08em] text-[#e50914]">E</b>
-              LIVE
-            </p>
-            <h1 className="mt-1 font-serif text-[42px] font-bold leading-[0.9] tracking-[-0.06em] text-white sm:text-[56px]">
+            <h1 className="text-[22px] font-bold leading-tight text-white sm:text-[28px]">
               {session.label}
             </h1>
-            <p className="mt-2 text-sm text-[#b3b3b3]">
+            <p className="mt-1 text-base text-[#d0d0d0]">
               {session.subjectName} · 20문항 · {now || "--:--:--"}
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setImmersive((value) => !value)}
-            className="h-10 rounded-[4px] bg-[rgba(109,109,110,0.7)] px-4 text-sm font-bold"
+            onClick={toggleImmersive}
+            className="h-12 rounded-[4px] bg-[#e50914] px-5 text-sm font-bold text-white hover:bg-[#c00710]"
           >
-            {immersive ? "몰입 종료" : "몰입 모드"}
+            몰입 모드
           </button>
         </div>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[1fr_320px]">
+        <div className="grid items-stretch gap-4 xl:grid-cols-[1fr_300px]">
           <section
             className={cn(
-              "relative overflow-hidden rounded-[4px] bg-black/55 px-4 py-8 text-center shadow-[0_16px_40px_rgba(0,0,0,0.7)] sm:px-8",
+              "relative flex min-h-[58vh] flex-col justify-center overflow-hidden rounded-[4px] bg-black px-4 py-8 text-center sm:min-h-[64vh] sm:px-8",
               alarm && "alarm-flash",
             )}
           >
-            <p className="text-[12px] font-bold tracking-[0.2em] text-[#808080]">남은 시간</p>
-            <div
-              className={cn(
-                "clock-glow mt-2 text-[56px] font-black leading-none tracking-[-0.04em] text-white sm:text-[88px] md:text-[108px]",
-                remaining <= 60 && remaining > 0 && "text-[#e50914]",
-                alarm && "text-[#e50914]",
-              )}
-            >
-              {display.hours !== "00" ? `${display.hours}:` : null}
-              {display.minutes}:{display.seconds}
+            <p className="text-lg font-bold text-[#c8c8c8]">남은 시간</p>
+            <div className="mt-3" style={{ fontSize: "clamp(5.5rem, 16vw, 13rem)" }}>
+              <ClockFace />
             </div>
-            <div className="nf-progress mx-auto mt-6 max-w-xl">
+            <div className="nf-progress mx-auto mt-8 h-2 max-w-3xl">
               <span style={{ width: `${progress * 100}%` }} />
             </div>
-
-            <div className="mx-auto mt-8 grid max-w-md grid-cols-3 gap-2">
+            <div className="mx-auto mt-8 grid w-full max-w-lg grid-cols-3 gap-3">
               <TimeField label="시" value={hours} max={3} onChange={setHours} />
               <TimeField label="분" value={minutes} max={59} onChange={setMinutes} />
               <TimeField label="초" value={seconds} max={59} onChange={setSeconds} />
             </div>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               <HallButton onClick={applyDuration}>시간 적용</HallButton>
-              <HallButton onClick={running ? pause : start} accent>
-                {running ? "일시정지" : "▶ 시작"}
-              </HallButton>
+              <PlayPauseButton running={running} onClick={running ? pause : start} />
               <HallButton onClick={reset}>리셋</HallButton>
             </div>
             {alarm ? (
-              <p className="mt-5 text-sm font-bold text-[#e50914]">시험 종료 · 답안을 제출하세요</p>
+              <p className="mt-6 text-xl font-bold text-[#e50914]">시험 종료 · 답안을 제출하세요</p>
             ) : null}
           </section>
 
@@ -258,6 +294,38 @@ export function ExamHall({ session, classes }: Props) {
           </aside>
         </div>
       </div>
+
+      {immersive && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[200] flex flex-col bg-black text-white">
+              <button
+                type="button"
+                onClick={toggleImmersive}
+                className="absolute right-6 top-6 z-10 h-12 rounded-[4px] border border-white/25 bg-white/10 px-5 text-base font-bold"
+              >
+                몰입 종료 · ESC
+              </button>
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
+                <p className="text-2xl font-bold text-[#c8c8c8]">{session.label}</p>
+                <p className="mt-2 text-lg text-[#808080]">남은 시간</p>
+                <div className="mt-4" style={{ fontSize: "clamp(8rem, 28vw, 20rem)" }}>
+                  <ClockFace />
+                </div>
+                <div className="nf-progress mx-auto mt-10 h-2 w-full max-w-5xl">
+                  <span style={{ width: `${progress * 100}%` }} />
+                </div>
+                {alarm ? (
+                  <p className="mt-8 text-3xl font-bold text-[#e50914]">시험 종료 · 답안을 제출하세요</p>
+                ) : (
+                  <div className="mt-12">
+                    <PlayPauseButton running={running} onClick={running ? pause : start} />
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -275,14 +343,14 @@ function TimeField({
 }) {
   return (
     <label className="text-left">
-      <span className="mb-1 block text-[11px] font-semibold text-[#808080]">{label}</span>
+      <span className="mb-1 block text-sm font-bold text-[#d0d0d0]">{label}</span>
       <input
         type="number"
         min={0}
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-10 w-full rounded-[4px] border border-[#555] bg-[rgba(22,22,22,0.66)] text-center text-lg font-bold text-white"
+        className="h-12 w-full rounded-[4px] border border-[#777] bg-[#1a1a1a] text-center text-xl font-bold text-white"
       />
     </label>
   );
@@ -291,24 +359,46 @@ function TimeField({
 function HallButton({
   children,
   onClick,
-  accent,
 }: {
   children: React.ReactNode;
   onClick: () => void;
-  accent?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "h-10 rounded-[4px] px-5 text-sm font-bold",
-        accent
-          ? "bg-white text-black hover:bg-white/75"
-          : "bg-[rgba(109,109,110,0.7)] text-white hover:bg-[rgba(109,109,110,0.4)]",
-      )}
+      className="h-14 min-w-[120px] rounded-[4px] bg-[#3d3d3d] px-6 text-base font-bold text-white hover:bg-[#525252]"
     >
       {children}
+    </button>
+  );
+}
+
+function PlayPauseButton({
+  running,
+  onClick,
+}: {
+  running: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={running ? "일시정지" : "시작"}
+      className="inline-flex h-16 items-center gap-3 rounded-full bg-[#e50914] px-7 text-lg font-bold text-white hover:bg-[#c00710]"
+    >
+      {running ? (
+        <svg viewBox="0 0 24 24" className="h-7 w-7 fill-current" aria-hidden>
+          <rect x="6" y="5" width="4" height="14" rx="1" />
+          <rect x="14" y="5" width="4" height="14" rx="1" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" className="h-7 w-7 fill-current" aria-hidden>
+          <path d="M8 5.5v13l11-6.5L8 5.5z" />
+        </svg>
+      )}
+      {running ? "일시정지" : "시작"}
     </button>
   );
 }
