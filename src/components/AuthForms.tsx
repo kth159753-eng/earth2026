@@ -1,10 +1,9 @@
 "use client";
 
 import { BrandMark, Button, Field, Notice, TextField } from "@/components/ui";
-import { loginWithUsername } from "@/lib/auth";
-import { networkErrorMessage, signupErrorMessage } from "@/lib/auth-errors";
+import { loginWithUsername, signUpTeacher } from "@/lib/auth";
+import { networkErrorMessage } from "@/lib/auth-errors";
 import { siteUrl } from "@/lib/config";
-import { ensureTeacherProfile } from "@/lib/data";
 import { createClient } from "@/lib/supabase/client";
 import {
   validateName,
@@ -147,49 +146,20 @@ export function SignupForm() {
 
     setPending(true);
     try {
-      const supabase = createClient();
-      const cleanEmail = email.trim();
-      const cleanUsername = username.trim().toLowerCase();
-      const cleanName = fullName.trim();
-      const { data, error: signError } = await supabase.auth.signUp({
-        email: cleanEmail,
+      const result = await signUpTeacher({
+        email: email.trim(),
         password,
-        options: {
-          data: {
-            username: cleanUsername,
-            full_name: cleanName,
-          },
-        },
+        username: username.trim().toLowerCase(),
+        full_name: fullName.trim(),
       });
-
-      const alreadyRegistered = (signError?.message || "")
-        .toLowerCase()
-        .includes("already registered");
-      if (signError && !alreadyRegistered) {
-        setError(signupErrorMessage(signError));
+      if (!result.ok) {
+        setError(result.message);
         return;
       }
-
-      if (!data.session) {
-        const { data: signed, error: signInError } =
-          await supabase.auth.signInWithPassword({
-            email: cleanEmail,
-            password,
-          });
-        if (signInError || !signed.session) {
-          if (alreadyRegistered) {
-            setError("이미 가입된 이메일입니다. 로그인에서 아이디로 들어와 주세요.");
-            return;
-          }
-          setInfo("가입이 완료되었습니다. 로그인에서 아이디로 들어와 주세요.");
-          return;
-        }
+      if (result.needsLogin) {
+        setInfo("가입이 완료되었습니다. 로그인에서 아이디로 들어와 주세요.");
+        return;
       }
-
-      await ensureTeacherProfile({
-        username: cleanUsername,
-        full_name: cleanName,
-      });
       router.replace("/admin/");
     } catch (error) {
       setError(networkErrorMessage(error));
