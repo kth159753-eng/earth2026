@@ -1,5 +1,10 @@
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
+export function appHref(path: string) {
+  const next = path.startsWith("/") ? path : `/${path}`;
+  return `${BASE_PATH}${next}`;
+}
+
 export function siteUrl() {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
   if (explicit) return explicit;

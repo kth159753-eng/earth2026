@@ -4,10 +4,10 @@ import { ActiveClassControl } from "@/components/ClassIdentity";
 import { ExamWarmCache, PapersKeepAlive } from "@/components/ExamPaperCache";
 import { BrandMark, HeaderIconWell, headerChipClass } from "@/components/ui";
 import { logoutTeacher } from "@/lib/auth";
+import { appHref } from "@/lib/config";
 import { EXAM_SESSIONS, groupSessionsByYear, warmExamSession, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -201,9 +201,9 @@ export function TeacherShell({
               {NAV.map((item) => {
                 const active = section === item.id;
                 return (
-                  <Link
+                  <a
                     key={item.id}
-                    href={hrefFor(item.id, sessionId)}
+                    href={appHref(hrefFor(item.id, sessionId))}
                     className={cn(headerChipClass(active), "flex-1 justify-center md:flex-none")}
                   >
                     <HeaderIconWell active={active}>
@@ -214,7 +214,7 @@ export function TeacherShell({
                     {active ? (
                       <span className="absolute top-1.5 bottom-1.5 left-0.5 w-[2px] rounded-full bg-[#e50914] md:top-2 md:bottom-2" />
                     ) : null}
-                  </Link>
+                  </a>
                 );
               })}
             </nav>
@@ -356,14 +356,13 @@ function SessionLink({
   const official = HIGHLIGHT_MONTHS.has(session.month);
 
   return (
-    <Link
-      href={href}
-      prefetch
+    <a
+      href={appHref(href)}
       onClick={onClick}
       onPointerEnter={() => warmExamSession(session)}
       onFocus={() => warmExamSession(session)}
       className={cn(
-        "relative block rounded-[4px] px-3 py-1.5 transition duration-150",
+        "relative block cursor-pointer rounded-[4px] px-3 py-1.5 transition duration-150",
         active
           ? "bg-[#1c1c1c]"
           : "[@media(hover:hover)]:hover:bg-[#161616] active:bg-[#1a1a1a]",
@@ -398,6 +397,6 @@ function SessionLink({
         </span>
       </span>
       <span className="mt-0.5 block text-[11px] leading-tight text-[#8a8a8a]">{session.subjectName}</span>
-    </Link>
+    </a>
   );
 }
