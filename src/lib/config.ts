@@ -18,9 +18,13 @@ export function omrUrl(code: string) {
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-  );
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1$/i, "");
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    "";
+  return Boolean(url && key);
 }

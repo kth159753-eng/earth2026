@@ -1,5 +1,9 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+"use client";
+
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublicKey, supabaseUrl } from "@/lib/supabase/env";
+
+let browserClient: SupabaseClient | null = null;
 
 export function createClient() {
   const url = supabaseUrl();
@@ -7,11 +11,13 @@ export function createClient() {
   if (!url || !key) {
     throw new Error("Supabase 환경 변수가 없습니다.");
   }
-  return createSupabaseClient(url, key, {
+  if (browserClient) return browserClient;
+  browserClient = createSupabaseClient(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
     },
   });
+  return browserClient;
 }

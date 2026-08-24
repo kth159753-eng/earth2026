@@ -1,5 +1,13 @@
+function normalizeSupabaseUrl(value: string) {
+  return value
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1$/i, "")
+    .replace(/\/auth\/v1$/i, "");
+}
+
 export function supabaseUrl() {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  return normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL || "");
 }
 
 export function supabasePublicKey() {
