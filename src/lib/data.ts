@@ -90,7 +90,8 @@ export async function ensureTeacherProfile(input?: {
     if (existing) {
       const explicitMeta =
         user.user_metadata?.role === "student" || user.user_metadata?.role === "teacher";
-      const dbRole = roleFromMeta(existing.role, fallback.role);
+      const rowRole = "role" in existing ? existing.role : undefined;
+      const dbRole = roleFromMeta(rowRole, fallback.role);
       const role = input?.role ?? (explicitMeta ? fallback.role : dbRole);
       if (role !== dbRole) {
         await supabase.from("profiles").update({ role }).eq("id", user.id);

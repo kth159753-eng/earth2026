@@ -422,7 +422,6 @@ const PaperPage = memo(function PaperPage({
         onLostPointerCapture={pointerUp}
         onPointerEnter={(event) => noteInkPointer(event)}
       />
-      />
     </div>
   );
 });
