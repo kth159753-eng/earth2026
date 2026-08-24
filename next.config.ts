@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["@supabase/supabase-js", "qrcode.react"],
   },
+  transpilePackages: ["pdfjs-dist"],
   env: {
     NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: supabaseKey,

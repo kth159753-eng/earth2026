@@ -2,6 +2,7 @@
 
 import { gradeSession, saveAnswerKey, saveClassConfigs } from "@/lib/actions/teacher";
 import { CHOICE_COUNT, QUESTION_COUNT, defaultPoints, emptyAnswers } from "@/lib/exams";
+import { GRADE_TONES, bandFromScore, bandLabel, countBands, normalizeCuts } from "@/lib/grades";
 import type { ClassConfig, ClassSummary, GradedRow } from "@/lib/types";
 import { Button, Notice, SectionTitle } from "@/components/ui";
 import {
@@ -30,6 +31,7 @@ export function AdminConsole({
   classConfigs,
   initialAnswers,
   initialPoints,
+  initialCuts,
   dashboard,
   onReload,
 }: {
@@ -38,6 +40,7 @@ export function AdminConsole({
   classConfigs: ClassConfig[];
   initialAnswers: number[];
   initialPoints: number[];
+  initialCuts: number[];
   dashboard: DashboardClass[];
   onReload?: () => void | Promise<void>;
 }) {
@@ -81,16 +84,36 @@ export function AdminConsole({
         ) : null}
         {tab === "answers" ? (
           <AnswerEditor
+            key={`${sessionId}-answers`}
             sessionId={sessionId}
             initialAnswers={initialAnswers}
             initialPoints={initialPoints}
+            initialCuts={initialCuts}
             onReload={onReload}
           />
         ) : null}
         {tab === "omr" ? (
-          <OmrBoard sessionId={sessionId} dashboard={dashboard} onReload={onReload} />
+          <OmrBoard
+            key={`${sessionId}-omr`}
+            sessionId={sessionId}
+            dashboard={dashboard}
+            cuts={normalizeCuts(
+              initialCuts,
+              initialPoints.length ? initialPoints.reduce((sum, value) => sum + value, 0) : 50,
+            )}
+            onReload={onReload}
+          />
         ) : null}
-        {tab === "compare" ? <CompareBoard dashboard={dashboard} /> : null}
+        {tab === "compare" ? (
+          <CompareBoard
+            key={`${sessionId}-compare`}
+            dashboard={dashboard}
+            cuts={normalizeCuts(
+              initialCuts,
+              initialPoints.length ? initialPoints.reduce((sum, value) => sum + value, 0) : 50,
+            )}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -347,27 +370,32 @@ function AnswerEditor({
   sessionId,
   initialAnswers,
   initialPoints,
+  initialCuts,
   onReload,
 }: {
   sessionId: string;
   initialAnswers: number[];
   initialPoints: number[];
+  initialCuts: number[];
   onReload?: () => void | Promise<void>;
 }) {
   const [answers, setAnswers] = useState(initialAnswers.length ? initialAnswers : emptyAnswers());
   const [points, setPoints] = useState(initialPoints.length ? initialPoints : defaultPoints());
+  const total = points.reduce((sum, value) => sum + value, 0);
+  const [cuts, setCuts] = useState(() => normalizeCuts(initialCuts, total));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const total = points.reduce((sum, value) => sum + value, 0);
 
   async function save() {
     setError("");
     setMessage("");
     setPending(true);
     try {
-      await saveAnswerKey(sessionId, answers, points);
-      setMessage("정답과 배점을 저장했습니다.");
+      const nextCuts = normalizeCuts(cuts, total);
+      await saveAnswerKey(sessionId, answers, points, nextCuts);
+      localStorage.setItem(`earth-cuts-${sessionId}`, JSON.stringify(nextCuts));
+      setMessage("정답, 배점, 등급 컷을 저장했습니다.");
       await onReload?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "저장에 실패했습니다.");
@@ -497,6 +525,35 @@ function AnswerEditor({
           </tbody>
         </table>
       </div>
+      <div className="mt-6 rounded-[4px] border border-white/8 bg-black/20 p-4">
+        <SectionTitle title="1~9등급 컷 원점수" />
+        <p className="mb-3 text-sm text-[#808080]">
+          해당 등급이 되려면 필요한 최소 원점수입니다. 1등급 컷이 가장 높고, 아래로 갈수록 낮아집니다. 총점 {total}점 기준.
+        </p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-9">
+          {cuts.map((cut, index) => (
+            <label key={index} className="rounded-[4px] bg-black/30 p-2">
+              <span className="block text-center text-[11px] font-bold" style={{ color: GRADE_TONES[index] }}>
+                {index + 1}등급
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={total}
+                value={cut}
+                onChange={(event) =>
+                  setCuts((current) => {
+                    const next = [...current];
+                    next[index] = Number(event.target.value);
+                    return next;
+                  })
+                }
+                className="mt-1 h-10 w-full rounded-[4px] border border-white/10 bg-transparent text-center text-base"
+              />
+            </label>
+          ))}
+        </div>
+      </div>
       {error ? <div className="mt-4"><Notice tone="warn">{error}</Notice></div> : null}
       {message ? <div className="mt-4"><Notice tone="ok">{message}</Notice></div> : null}
       <Button className="mt-5 w-full sm:w-auto" onClick={() => void save()} disabled={pending}>
@@ -509,13 +566,16 @@ function AnswerEditor({
 function OmrBoard({
   sessionId,
   dashboard,
+  cuts,
   onReload,
 }: {
   sessionId: string;
   dashboard: DashboardClass[];
+  cuts: number[];
   onReload?: () => void | Promise<void>;
 }) {
   const [selected, setSelected] = useState(dashboard[0] ? keyOf(dashboard[0]) : "");
+  const [scope, setScope] = useState<"class" | "all">("class");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -530,6 +590,11 @@ function OmrBoard({
       return { question, wrong, rate, total: submitted.length };
     });
   }, [dashboard]);
+
+  const scopedRows = useMemo(() => {
+    if (scope === "all") return dashboard.flatMap((item) => item.rows);
+    return current?.rows ?? [];
+  }, [current, dashboard, scope]);
 
   async function grade() {
     setError("");
@@ -558,10 +623,13 @@ function OmrBoard({
             <button
               key={keyOf(item)}
               type="button"
-              onClick={() => setSelected(keyOf(item))}
+              onClick={() => {
+                setSelected(keyOf(item));
+                setScope("class");
+              }}
               className={cn(
                 "rounded-[4px] px-3 py-1.5 text-sm",
-                current && keyOf(item) === keyOf(current)
+                current && keyOf(item) === keyOf(current) && scope === "class"
                   ? "bg-[#e50914] text-white"
                   : "bg-white/5 text-stone-300",
               )}
@@ -572,6 +640,16 @@ function OmrBoard({
               </span>
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setScope("all")}
+            className={cn(
+              "rounded-[4px] px-3 py-1.5 text-sm",
+              scope === "all" ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
+            )}
+          >
+            전체
+          </button>
         </div>
         <Button className="w-full sm:w-auto" onClick={() => void grade()} disabled={pending}>
           {pending ? "채점 중..." : "채점"}
@@ -581,10 +659,27 @@ function OmrBoard({
       {message ? <Notice tone="ok">{message}</Notice> : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="제출" value={`${current?.summary.submitted ?? 0}명`} />
-        <Stat label="평균" value={formatScore(current?.summary.average ?? null)} />
-        <Stat label="채점 완료" value={`${current?.summary.graded ?? 0}명`} />
+        <Stat label="제출" value={`${scope === "all" ? dashboard.reduce((sum, item) => sum + item.summary.submitted, 0) : current?.summary.submitted ?? 0}명`} />
+        <Stat
+          label="평균"
+          value={formatScore(
+            scope === "all"
+              ? averageOf(dashboard.flatMap((item) => item.rows.map((row) => row.score)))
+              : current?.summary.average ?? null,
+          )}
+        />
+        <Stat label="채점 완료" value={`${scope === "all" ? dashboard.reduce((sum, item) => sum + item.summary.graded, 0) : current?.summary.graded ?? 0}명`} />
       </div>
+
+      <GradeChart
+        title={
+          scope === "all"
+            ? "전체 1~9등급 분포"
+            : `${gradeLabel(current?.grade ?? 1)} ${classLabel(current?.classNumber ?? 1)} 등급 분포`
+        }
+        scores={scopedRows.map((row) => row.score)}
+        cuts={cuts}
+      />
 
       <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4">
         <p className="mb-3 text-sm text-stone-400">문항별 오답률</p>
@@ -603,45 +698,64 @@ function OmrBoard({
       </div>
 
       <div className="-mx-3 overflow-x-auto rounded-[4px] border-y border-white/8 sm:mx-0 sm:border">
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-white/3 text-stone-500">
             <tr>
               <th className="px-4 py-3 text-left font-medium">번호</th>
               <th className="px-4 py-3 text-left font-medium">제출</th>
               <th className="px-4 py-3 text-left font-medium">점수</th>
+              <th className="px-4 py-3 text-left font-medium">등급</th>
               <th className="px-4 py-3 text-left font-medium">틀린 문제</th>
             </tr>
           </thead>
           <tbody>
-            {current?.rows.map((row) => (
-              <tr key={row.studentNumber} className="border-t border-white/5">
-                <td className="px-4 py-3">{studentLabel(row.studentNumber)}</td>
-                <td className="px-4 py-3 text-stone-400">
-                  {row.submitted ? "제출" : "미제출"}
-                </td>
-                <td className="px-4 py-3 font-medium text-white">
-                  {formatScore(row.score)}
-                </td>
-                <td className="px-4 py-3">
-                  {row.wrongQuestions.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {row.wrongQuestions.map((question) => (
-                        <span
-                          key={question}
-                          className="rounded-md bg-rose-950/70 px-2 py-0.5 text-xs text-rose-100"
-                        >
-                          {question}
-                        </span>
-                      ))}
-                    </div>
-                  ) : row.submitted && row.score !== null ? (
-                    <span className="text-teal">만점</span>
-                  ) : (
-                    <span className="text-stone-600">채점 전</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {current?.rows.map((row) => {
+              const band = bandFromScore(row.score, cuts);
+              return (
+                <tr key={row.studentNumber} className="border-t border-white/5">
+                  <td className="px-4 py-3">{studentLabel(row.studentNumber)}</td>
+                  <td className="px-4 py-3 text-stone-400">
+                    {row.submitted ? "제출" : "미제출"}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-white">
+                    {formatScore(row.score)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {band ? (
+                      <span
+                        className="inline-flex rounded-[4px] px-2 py-0.5 text-xs font-bold"
+                        style={{
+                          color: GRADE_TONES[band - 1],
+                          background: `${GRADE_TONES[band - 1]}22`,
+                        }}
+                      >
+                        {bandLabel(band)}
+                      </span>
+                    ) : (
+                      <span className="text-stone-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {row.wrongQuestions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {row.wrongQuestions.map((question) => (
+                          <span
+                            key={question}
+                            className="rounded-md bg-rose-950/70 px-2 py-0.5 text-xs text-rose-100"
+                          >
+                            {question}
+                          </span>
+                        ))}
+                      </div>
+                    ) : row.submitted && row.score !== null ? (
+                      <span className="text-teal">만점</span>
+                    ) : (
+                      <span className="text-stone-600">채점 전</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -649,21 +763,28 @@ function OmrBoard({
   );
 }
 
-function CompareBoard({ dashboard }: { dashboard: DashboardClass[] }) {
+function CompareBoard({
+  dashboard,
+  cuts,
+}: {
+  dashboard: DashboardClass[];
+  cuts: number[];
+}) {
+  const ranked = useMemo(() => {
+    return [...dashboard].sort((a, b) => (b.summary.average ?? -1) - (a.summary.average ?? -1));
+  }, [dashboard]);
+
   const byGrade = useMemo(() => {
-    const map = new Map<number, ClassSummary[]>();
+    const map = new Map<number, DashboardClass[]>();
     for (const item of dashboard) {
       const list = map.get(item.grade) ?? [];
-      list.push(item.summary);
+      list.push(item);
       map.set(item.grade, list);
     }
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [dashboard]);
 
-  const maxAverage = Math.max(
-    ...dashboard.map((item) => item.summary.average ?? 0),
-    1,
-  );
+  const maxAverage = Math.max(...dashboard.map((item) => item.summary.average ?? 0), 1);
 
   if (dashboard.length === 0) {
     return <Notice>비교할 학급이 없습니다.</Notice>;
@@ -672,44 +793,92 @@ function CompareBoard({ dashboard }: { dashboard: DashboardClass[] }) {
   return (
     <section className="space-y-5">
       <div className="grid gap-3 md:grid-cols-3">
-        {byGrade.map(([grade, rows]) => {
-          const averages = rows
-            .map((row) => row.average)
-            .filter((value): value is number => value !== null);
-          const mean =
-            averages.length === 0
-              ? null
-              : averages.reduce((sum, value) => sum + value, 0) / averages.length;
-          const submitted = rows.reduce((sum, row) => sum + row.submitted, 0);
+        {byGrade.map(([grade, items]) => {
+          const scores = items.flatMap((item) => item.rows.map((row) => row.score));
+          const counts = countBands(scores, cuts);
+          const graded = counts.reduce((sum, value) => sum + value, 0);
+          const mean = averageOf(scores);
+          const submitted = items.reduce((sum, item) => sum + item.summary.submitted, 0);
           return (
             <div key={grade} className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
               <p className="text-sm text-stone-400">{gradeLabel(grade)}</p>
-              <p className="mt-2 text-3xl font-semibold text-white">
-                {formatScore(mean)}
+              <p className="mt-2 text-3xl font-semibold text-white">{formatScore(mean)}</p>
+              <p className="mt-1 text-xs text-stone-500">
+                제출 {submitted}명 · 채점 {graded}명
               </p>
-              <p className="mt-1 text-xs text-stone-500">제출 {submitted}명</p>
+              <StackedBands counts={counts} className="mt-4 h-3" />
+              <div className="mt-3 grid grid-cols-9 gap-1">
+                {counts.map((count, index) => (
+                  <div key={index} className="text-center">
+                    <p className="text-[10px] font-bold" style={{ color: GRADE_TONES[index] }}>
+                      {index + 1}
+                    </p>
+                    <p className="text-xs text-white">{count}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           );
         })}
       </div>
 
       <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
-        <SectionTitle title="학급 평균 비교" />
-        <div className="space-y-3">
-          {dashboard.map((item) => {
+        <SectionTitle title="학급 순위 · 등급 비교" />
+        <p className="mb-4 text-sm text-[#808080]">평균 순으로 정렬하고, 막대는 1~9등급 비율입니다.</p>
+        <div className="space-y-4">
+          {ranked.map((item, rank) => {
+            const scores = item.rows.map((row) => row.score);
+            const counts = countBands(scores, cuts);
+            const graded = counts.reduce((sum, value) => sum + value, 0);
+            const top = counts[0] + counts[1];
             const width = ((item.summary.average ?? 0) / maxAverage) * 100;
             return (
-              <div key={keyOf(item)}>
-                <div className="mb-1 flex justify-between text-sm">
-                  <span>
-                    {gradeLabel(item.grade)} {classLabel(item.classNumber)}
-                  </span>
-                  <span className="text-white">
-                    {formatScore(item.summary.average)}
-                  </span>
+              <div key={keyOf(item)} className="rounded-[4px] bg-black/25 p-3">
+                <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "inline-flex h-8 w-8 items-center justify-center rounded-[4px] text-sm font-black",
+                        rank === 0
+                          ? "bg-[#c4a574] text-black"
+                          : rank === 1
+                            ? "bg-[#9aa4b2] text-black"
+                            : rank === 2
+                              ? "bg-[#b07a4a] text-white"
+                              : "bg-white/8 text-stone-300",
+                      )}
+                    >
+                      {rank + 1}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-white">
+                        {gradeLabel(item.grade)} {classLabel(item.classNumber)}
+                      </p>
+                      <p className="text-xs text-stone-500">
+                        제출 {item.summary.submitted}/{item.summary.roster} · 1~2등급 {top}명
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-white">{formatScore(item.summary.average)}</p>
                 </div>
                 <div className="h-2 overflow-hidden rounded-[4px] bg-white/5">
                   <div className="h-full rounded-[4px] bg-[#e50914]" style={{ width: `${width}%` }} />
+                </div>
+                <StackedBands counts={counts} className="mt-2 h-4" />
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {counts.map((count, index) => (
+                    <span
+                      key={index}
+                      className="rounded-[4px] px-1.5 py-0.5 text-[10px] font-bold"
+                      style={{
+                        color: GRADE_TONES[index],
+                        background: `${GRADE_TONES[index]}1f`,
+                      }}
+                    >
+                      {index + 1}등급 {count}
+                      {graded ? ` · ${Math.round((count / graded) * 100)}%` : ""}
+                    </span>
+                  ))}
                 </div>
               </div>
             );
@@ -718,6 +887,77 @@ function CompareBoard({ dashboard }: { dashboard: DashboardClass[] }) {
       </div>
     </section>
   );
+}
+
+function GradeChart({
+  title,
+  scores,
+  cuts,
+}: {
+  title: string;
+  scores: Array<number | null>;
+  cuts: number[];
+}) {
+  const counts = countBands(scores, cuts);
+  const graded = counts.reduce((sum, value) => sum + value, 0);
+  const max = Math.max(...counts, 1);
+
+  return (
+    <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4">
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <p className="text-sm text-stone-400">{title}</p>
+        <p className="text-xs text-stone-500">채점 {graded}명</p>
+      </div>
+      <StackedBands counts={counts} className="mb-4 h-3" />
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-9">
+        {counts.map((count, index) => {
+          const percent = graded ? (count / graded) * 100 : 0;
+          return (
+            <div key={index} className="rounded-[4px] bg-black/30 p-2">
+              <p className="text-center text-[11px] font-bold" style={{ color: GRADE_TONES[index] }}>
+                {index + 1}등급
+              </p>
+              <p className="mt-1 text-center text-xl font-bold text-white">{count}</p>
+              <p className="text-center text-[11px] text-stone-500">{percent.toFixed(0)}%</p>
+              <div className="mt-2 flex h-16 items-end">
+                <div
+                  className="w-full rounded-sm"
+                  style={{
+                    height: `${(count / max) * 100}%`,
+                    minHeight: count ? 4 : 0,
+                    background: GRADE_TONES[index],
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StackedBands({ counts, className }: { counts: number[]; className?: string }) {
+  const total = counts.reduce((sum, value) => sum + value, 0);
+  return (
+    <div className={cn("flex overflow-hidden rounded-full bg-white/5", className)}>
+      {counts.map((count, index) => (
+        <div
+          key={index}
+          style={{
+            width: total ? `${(count / total) * 100}%` : "0%",
+            background: GRADE_TONES[index],
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function averageOf(scores: Array<number | null>) {
+  const values = scores.filter((value): value is number => value !== null && !Number.isNaN(value));
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

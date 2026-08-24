@@ -1,6 +1,7 @@
 "use client";
 
 import { ensureOmrCode } from "@/lib/actions/teacher";
+import { readActiveClass, writeActiveClass } from "@/lib/active-class";
 import type { ExamSession } from "@/lib/exams";
 import type { ClassConfig } from "@/lib/types";
 import { omrUrl as buildOmrUrl } from "@/lib/config";
@@ -60,6 +61,7 @@ export function ExamHall({ session, classes }: Props) {
   const [grade, setGrade] = useState(grouped.grades[0] ?? 3);
   const classOptions = classes.filter((row) => row.grade === grade);
   const [classNumber, setClassNumber] = useState(classOptions[0]?.class_number ?? 1);
+  const [classReady, setClassReady] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [immersive, setImmersive] = useState(false);
   const [now, setNow] = useState("");
@@ -73,11 +75,45 @@ export function ExamHall({ session, classes }: Props) {
   const endAt = useRef<number | null>(null);
 
   useEffect(() => {
+    if (classReady || classes.length === 0) return;
+    const saved = readActiveClass();
+    if (
+      saved &&
+      classes.some((row) => row.grade === saved.grade && row.class_number === saved.classNumber)
+    ) {
+      setGrade(saved.grade);
+      setClassNumber(saved.classNumber);
+    }
+    setClassReady(true);
+  }, [classReady, classes]);
+
+  useEffect(() => {
     const available = classes.filter((row) => row.grade === grade);
     if (!available.some((row) => row.class_number === classNumber)) {
       setClassNumber(available[0]?.class_number ?? 1);
     }
   }, [grade, classNumber, classes]);
+
+  useEffect(() => {
+    if (!classReady || classes.length === 0) return;
+    writeActiveClass({
+      grade,
+      classNumber,
+      sessionId: session.id,
+      running,
+    });
+    return () => {
+      const current = readActiveClass();
+      if (
+        current &&
+        current.grade === grade &&
+        current.classNumber === classNumber &&
+        current.sessionId === session.id
+      ) {
+        writeActiveClass({ ...current, running: false });
+      }
+    };
+  }, [classReady, grade, classNumber, session.id, running, classes.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -326,28 +362,51 @@ export function ExamHall({ session, classes }: Props) {
               >
                 몰입 종료<span className="hidden sm:inline"> · ESC</span>
               </button>
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 sm:px-6">
+              <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 sm:px-6">
                 <p className="text-[clamp(1.75rem,5vw,3.5rem)] font-black leading-none tracking-[-0.04em] text-[#e50914]">
                   2027 대수능 {suneungCountdown()}
                 </p>
-                <p className="mt-3 rounded-[3px] bg-[#f6ff4d] px-3 py-1.5 text-[clamp(1rem,2.8vw,1.85rem)] font-black leading-none text-[#141414] sm:px-4 sm:py-2">
+                <p className="mt-3 text-[clamp(1rem,2.4vw,1.55rem)] font-semibold tracking-[0.06em] text-[#d7b4b4]">
                   2026년 11월 19일 목요일
                 </p>
                 <p className="mt-6 text-lg font-bold text-[#c8c8c8] sm:text-2xl">{session.label}</p>
                 <p className="mt-2 text-base text-[#808080] sm:text-lg">남은 시간</p>
-                <div className="mt-4" style={{ fontSize: "clamp(4rem, 22vw, 20rem)" }}>
+                <div className="mt-2 sm:mt-3" style={{ fontSize: "clamp(5.25rem, 26vw, 22rem)" }}>
                   <ClockFace display={display} remaining={remaining} alarm={alarm} />
                 </div>
-                <div className="nf-progress mx-auto mt-8 h-2 w-full max-w-5xl sm:mt-10">
+                <div className="nf-progress mx-auto mt-6 h-2 w-full max-w-5xl sm:mt-8">
                   <span style={{ width: `${progress * 100}%` }} />
                 </div>
                 {alarm ? (
                   <p className="mt-8 text-xl font-bold text-[#e50914] sm:text-3xl">시험 종료 · 답안을 제출하세요</p>
                 ) : (
-                  <div className="mt-10 sm:mt-12">
+                  <div className="mt-8 sm:mt-10">
                     <PlayPauseButton running={running} onClick={running ? pause : start} />
                   </div>
                 )}
+                <div className="mt-8 w-[148px] sm:absolute sm:bottom-[max(1.5rem,env(safe-area-inset-bottom))] sm:left-[max(1.5rem,env(safe-area-inset-left))] sm:mt-0 sm:w-[168px]">
+                  <div className="rounded-[4px] bg-white p-2">
+                    {code ? (
+                      <QRCodeSVG
+                        value={omrUrl}
+                        size={168}
+                        level="M"
+                        className="mx-auto h-auto w-full"
+                        bgColor="#ffffff"
+                        fgColor="#141414"
+                      />
+                    ) : (
+                      <div className="grid aspect-square place-items-center text-center text-xs text-[#808080]">
+                        학급을 설정하면
+                        <br />
+                        QR이 보입니다
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-center text-sm text-[#d0d0d0]">
+                    {gradeLabel(grade)} {classLabel(classNumber)}
+                  </p>
+                </div>
               </div>
             </div>,
             document.body,

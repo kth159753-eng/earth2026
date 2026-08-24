@@ -38,6 +38,7 @@ create table if not exists public.answer_keys (
   session_id text not null,
   answers smallint[] not null,
   points smallint[] not null,
+  grade_cuts smallint[],
   updated_at timestamptz not null default now(),
   unique (teacher_id, session_id),
   constraint answer_len check (cardinality(answers) = 20),

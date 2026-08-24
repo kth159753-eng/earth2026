@@ -1,4 +1,5 @@
 import { DEFAULT_SESSION_ID, defaultPoints, emptyAnswers } from "@/lib/exams";
+import { defaultGradeCuts } from "@/lib/grades";
 import { createClient } from "@/lib/supabase/client";
 import type {
   AnswerKey,
@@ -116,6 +117,13 @@ export async function getAnswerKey(sessionId: string): Promise<AnswerKey | null>
   const user = await currentUser();
   if (!user) return null;
   const supabase = createClient();
+  const full = await supabase
+    .from("answer_keys")
+    .select("id, teacher_id, session_id, answers, points, grade_cuts")
+    .eq("teacher_id", user.id)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+  if (!full.error) return full.data;
   const { data } = await supabase
     .from("answer_keys")
     .select("id, teacher_id, session_id, answers, points")
@@ -126,12 +134,14 @@ export async function getAnswerKey(sessionId: string): Promise<AnswerKey | null>
 }
 
 export function fallbackAnswerKey(sessionId: string, teacherId: string): AnswerKey {
+  const points = defaultPoints();
   return {
     id: "",
     teacher_id: teacherId,
     session_id: sessionId,
     answers: emptyAnswers(),
-    points: defaultPoints(),
+    points,
+    grade_cuts: defaultGradeCuts(points.reduce((sum, value) => sum + value, 0)),
   };
 }
 

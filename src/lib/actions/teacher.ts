@@ -87,6 +87,7 @@ export async function saveAnswerKey(
   sessionId: string,
   answers: number[],
   points: number[],
+  gradeCuts?: number[],
 ) {
   if (!getSession(sessionId)) throw new Error("존재하지 않는 회차입니다.");
   if (answers.length !== QUESTION_COUNT || points.length !== QUESTION_COUNT) {
@@ -95,19 +96,30 @@ export async function saveAnswerKey(
 
   const safeAnswers = answers.map((value) => clamp(Math.round(value), 0, 5));
   const safePoints = points.map((value) => clamp(Math.round(value), 1, 5));
+  const total = safePoints.reduce((sum, value) => sum + value, 0);
+  const safeCuts = (gradeCuts ?? []).slice(0, 9).map((value) =>
+    clamp(Math.round(value), 0, total),
+  );
 
   const { supabase, user } = await requireTeacher();
-  const { error } = await supabase.from("answer_keys").upsert(
-    {
-      teacher_id: user.id,
-      session_id: sessionId,
-      answers: safeAnswers,
-      points: safePoints,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "teacher_id,session_id" },
-  );
-  if (error) throw new Error("정답을 저장하지 못했습니다.");
+  const payload: Record<string, unknown> = {
+    teacher_id: user.id,
+    session_id: sessionId,
+    answers: safeAnswers,
+    points: safePoints,
+    updated_at: new Date().toISOString(),
+  };
+  if (safeCuts.length === 9) payload.grade_cuts = safeCuts;
+  const { error } = await supabase.from("answer_keys").upsert(payload, {
+    onConflict: "teacher_id,session_id",
+  });
+  if (error) {
+    const { grade_cuts: _unused, ...withoutCuts } = payload;
+    const { error: again } = await supabase.from("answer_keys").upsert(withoutCuts, {
+      onConflict: "teacher_id,session_id",
+    });
+    if (again) throw new Error("정답을 저장하지 못했습니다.");
+  }
   return { ok: true };
 }
 

@@ -30,6 +30,7 @@ function AdminInner() {
   const [classConfigs, setClassConfigs] = useState<ClassConfig[]>([]);
   const [answers, setAnswers] = useState<number[]>([]);
   const [points, setPoints] = useState<number[]>([]);
+  const [gradeCuts, setGradeCuts] = useState<number[]>([]);
   const [dashboard, setDashboard] = useState<DashboardClass[]>([]);
   const [ready, setReady] = useState(false);
 
@@ -43,6 +44,14 @@ function AdminInner() {
     setClassConfigs(configs);
     setAnswers(answerKey.answers);
     setPoints(answerKey.points);
+    let cuts = answerKey.grade_cuts ?? [];
+    try {
+      const local = localStorage.getItem(`earth-cuts-${session.id}`);
+      if ((!cuts || cuts.length < 9) && local) cuts = JSON.parse(local) as number[];
+    } catch {
+      cuts = answerKey.grade_cuts ?? [];
+    }
+    setGradeCuts(cuts);
     setDashboard(
       configs.map((config) => {
         const classSubmissions = submissions.filter(
@@ -82,6 +91,7 @@ function AdminInner() {
       classConfigs={classConfigs}
       initialAnswers={answers}
       initialPoints={points}
+      initialCuts={gradeCuts}
       dashboard={dashboard}
       onReload={load}
     />

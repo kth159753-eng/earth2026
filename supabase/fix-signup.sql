@@ -8,6 +8,8 @@ grant select, insert, update, delete on table public.exam_assets to authenticate
 grant select, insert, update, delete on table public.omr_codes to authenticated;
 grant select, insert, update, delete on table public.submissions to authenticated;
 
+alter table public.answer_keys add column if not exists grade_cuts smallint[];
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql

@@ -75,12 +75,12 @@ export function LoginForm() {
   return (
     <AuthShell title="교사 로그인" subtitle="아이디와 비밀번호로 교실 시험장을 엽니다.">
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field label="아이디 또는 이메일">
+        <Field label="아이디 입력">
           <TextField
             autoComplete="username"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
-            placeholder="아이디 또는 이메일"
+            placeholder="아이디 입력"
             required
           />
         </Field>

@@ -18,6 +18,7 @@ export type AnswerKey = {
   session_id: string;
   answers: number[];
   points: number[];
+  grade_cuts?: number[] | null;
 };
 
 export type OmrCode = {
