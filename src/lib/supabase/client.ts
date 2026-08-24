@@ -6,7 +6,7 @@ import { supabasePublicKey, supabaseUrl } from "@/lib/supabase/env";
 let browserClient: SupabaseClient | null = null;
 
 function fetchWithoutPublishableBearer(key: string): typeof fetch {
-  return async (input, init) => {
+  return (input, init) => {
     const headers = new Headers(init?.headers);
     if (input instanceof Request) {
       input.headers.forEach((value, name) => {
@@ -20,20 +20,17 @@ function fetchWithoutPublishableBearer(key: string): typeof fetch {
     if (!headers.has("apikey")) {
       headers.set("apikey", key);
     }
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
-    return fetch(url, { ...init, headers });
+    if (input instanceof Request) {
+      return fetch(new Request(input, { ...init, headers }));
+    }
+    return fetch(input, { ...init, headers });
   };
 }
 
 export function createClient() {
+  if (browserClient) return browserClient;
   const url = supabaseUrl();
   const key = supabasePublicKey();
-  if (browserClient) return browserClient;
   browserClient = createSupabaseClient(url, key, {
     auth: {
       persistSession: true,

@@ -22,45 +22,68 @@ function metaText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function ensureTeacherProfile(input?: {
-  username?: string;
-  full_name?: string;
-}): Promise<Profile | null> {
-  const user = await currentUser();
-  if (!user) return null;
-  const supabase = createClient();
-  const { data: existing } = await supabase
-    .from("profiles")
-    .select("id, username, full_name")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (existing) return existing;
-
+function profileFromUser(
+  user: { id: string; user_metadata?: Record<string, unknown> },
+  input?: { username?: string; full_name?: string },
+): Profile {
   const fromMetaName = metaText(user.user_metadata?.full_name);
   const fromMetaUser = metaText(user.user_metadata?.username).toLowerCase();
   const fullName = (input?.full_name || fromMetaName || "교사").trim().slice(0, 20);
   const requested = (input?.username || fromMetaUser).trim().toLowerCase();
   const fallback = `user_${user.id.replace(/-/g, "").slice(0, 8)}`;
-  const username = /^[a-z0-9_]{4,20}$/.test(requested) ? requested : fallback;
-
-  const write = async (nextUsername: string, nextName: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          username: nextUsername,
-          full_name: nextName.length >= 2 ? nextName : "교사",
-        },
-        { onConflict: "id" },
-      )
-      .select("id, username, full_name")
-      .maybeSingle();
-    if (error) return null;
-    return data;
+  return {
+    id: user.id,
+    username: /^[a-z0-9_]{4,20}$/.test(requested) ? requested : fallback,
+    full_name: fullName.length >= 2 ? fullName : "교사",
   };
+}
 
-  return (await write(username, fullName)) ?? (await write(fallback, fullName));
+export async function ensureTeacherProfile(input?: {
+  username?: string;
+  full_name?: string;
+}): Promise<Profile | null> {
+  try {
+    const user = await currentUser();
+    if (!user) return null;
+    const fallback = profileFromUser(user, input);
+    const supabase = createClient();
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("id, username, full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (existing) return existing;
+
+    const write = async (nextUsername: string, nextName: string) => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            username: nextUsername,
+            full_name: nextName,
+          },
+          { onConflict: "id" },
+        )
+        .select("id, username, full_name")
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    };
+
+    return (
+      (await write(fallback.username, fallback.full_name)) ??
+      (await write(`user_${user.id.replace(/-/g, "").slice(0, 8)}`, "교사")) ??
+      fallback
+    );
+  } catch {
+    try {
+      const user = await currentUser();
+      return user ? profileFromUser(user, input) : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export async function getProfile(): Promise<Profile | null> {

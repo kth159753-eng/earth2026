@@ -25,6 +25,13 @@ export function signupErrorMessage(error: { message?: string; code?: string } | 
   return "회원가입에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.";
 }
 
-export function networkErrorMessage(_error: unknown) {
+export function networkErrorMessage(error: unknown) {
+  if (typeof window !== "undefined" && window.location.hostname.includes("github.io")) {
+    return "지금 열린 주소는 예전 배포입니다. http://localhost:3000 에서 이용해 주세요.";
+  }
+  const message = error instanceof Error ? error.message : "";
+  if (message.toLowerCase().includes("failed to fetch")) {
+    return "연결에 실패했습니다. http://localhost:3000 을 새로고침한 뒤 다시 시도해 주세요.";
+  }
   return "연결에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 }

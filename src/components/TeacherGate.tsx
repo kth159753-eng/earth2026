@@ -31,7 +31,10 @@ export function TeacherGate({ children }: { children: React.ReactNode }) {
         setReady(true);
       })
       .catch(() => {
-        if (!cancelled) router.replace("/");
+        if (!cancelled) {
+          setReady(true);
+          router.replace("/");
+        }
       });
 
     return () => {

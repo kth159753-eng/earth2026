@@ -51,46 +51,56 @@ export async function signUpTeacher(input: {
   username: string;
   full_name: string;
 }): Promise<SignUpResult> {
-  const { response, json } = await authPost("/auth/v1/signup", {
-    email: input.email,
-    password: input.password,
-    data: {
-      username: input.username,
-      full_name: input.full_name,
-    },
-  });
-
-  const errorText = json.msg || json.error_description || json.message || json.error || "";
-  const alreadyRegistered = errorText.toLowerCase().includes("already registered");
-
-  if (!response.ok && !alreadyRegistered) {
-    return { ok: false, message: signupErrorMessage({ message: errorText }) };
-  }
-
-  let signedIn = await applySession(json.access_token, json.refresh_token);
-  if (!signedIn) {
-    const signed = await authPost("/auth/v1/token?grant_type=password", {
+  try {
+    const { response, json } = await authPost("/auth/v1/signup", {
       email: input.email,
       password: input.password,
+      data: {
+        username: input.username,
+        full_name: input.full_name,
+      },
     });
-    signedIn = await applySession(signed.json.access_token, signed.json.refresh_token);
-  }
 
-  if (!signedIn) {
-    if (alreadyRegistered) {
-      return {
-        ok: false,
-        message: "이미 가입된 이메일입니다. 로그인에서 아이디로 들어와 주세요.",
-      };
+    const errorText = json.msg || json.error_description || json.message || json.error || "";
+    const alreadyRegistered =
+      errorText.toLowerCase().includes("already registered") ||
+      errorText.toLowerCase().includes("user_already_exists");
+
+    if (!response.ok && !alreadyRegistered) {
+      return { ok: false, message: signupErrorMessage({ message: errorText }) };
     }
-    return { ok: true, needsLogin: true };
-  }
 
-  await ensureTeacherProfile({
-    username: input.username,
-    full_name: input.full_name,
-  });
-  return { ok: true };
+    let signedIn = await applySession(json.access_token, json.refresh_token);
+    if (!signedIn) {
+      const signed = await authPost("/auth/v1/token?grant_type=password", {
+        email: input.email,
+        password: input.password,
+      });
+      signedIn = await applySession(signed.json.access_token, signed.json.refresh_token);
+    }
+
+    if (!signedIn) {
+      if (alreadyRegistered) {
+        return {
+          ok: false,
+          message: "이미 가입된 이메일입니다. 로그인에서 아이디로 들어와 주세요.",
+        };
+      }
+      return { ok: true, needsLogin: true };
+    }
+
+    await ensureTeacherProfile({
+      username: input.username,
+      full_name: input.full_name,
+    });
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.toLowerCase().includes("failed to fetch")) {
+      return { ok: false, message: "연결에 실패했습니다. http://localhost:3000/signup 에서 다시 시도해 주세요." };
+    }
+    return { ok: false, message: signupErrorMessage({ message }) };
+  }
 }
 
 async function signInWithEmail(email: string, password: string) {
