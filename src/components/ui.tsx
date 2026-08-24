@@ -111,6 +111,16 @@ export function SectionTitle({
   );
 }
 
+export function headerChipClass(active = false) {
+  return cn(
+    "inline-flex h-10 min-h-10 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px] font-semibold tracking-[-0.01em] transition duration-150",
+    "active:translate-y-px sm:px-3 sm:text-[13px]",
+    active
+      ? "border-white/20 bg-white/[0.11] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]"
+      : "border-white/[0.08] bg-transparent text-[#c4c4c4] hover:border-white/16 hover:bg-white/[0.06] hover:text-white",
+  );
+}
+
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cn("flex min-w-0 items-center", compact ? "gap-2" : "gap-3")}>

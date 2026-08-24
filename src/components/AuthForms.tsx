@@ -2,10 +2,13 @@
 
 import { BrandMark, Button, Field, Notice, TextField } from "@/components/ui";
 import { loginWithUsername, signUpTeacher } from "@/lib/auth";
+import { getProfile } from "@/lib/data";
 import { networkErrorMessage } from "@/lib/auth-errors";
 import { siteUrl } from "@/lib/config";
 import { createClient } from "@/lib/supabase/client";
+import type { UserRole } from "@/lib/types";
 import {
+  cn,
   validateName,
   validatePassword,
   validateUsername,
@@ -13,6 +16,45 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+function RolePick({
+  role,
+  onChange,
+}: {
+  role: UserRole;
+  onChange: (role: UserRole) => void;
+}) {
+  return (
+    <Field label="구분">
+      <div className="grid grid-cols-2 gap-2">
+        {(
+          [
+            ["student", "학생"],
+            ["teacher", "교사"],
+          ] as const
+        ).map(([id, label]) => (
+          <label
+            key={id}
+            className={cn(
+              "flex h-12 cursor-pointer items-center gap-2.5 rounded-[4px] border px-3 text-sm font-bold",
+              role === id
+                ? "border-[#e50914] bg-[#e50914]/12 text-white"
+                : "border-white/15 bg-black/30 text-[#c8c8c8]",
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={role === id}
+              onChange={() => onChange(id)}
+              className="h-4 w-4 accent-[#e50914]"
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+    </Field>
+  );
+}
 
 function AuthShell({
   title,
@@ -49,6 +91,7 @@ function AuthShell({
 
 export function LoginForm() {
   const router = useRouter();
+  const [role, setRole] = useState<UserRole>("teacher");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -59,12 +102,12 @@ export function LoginForm() {
     setError("");
     setPending(true);
     try {
-      const data = await loginWithUsername(username, password);
+      const data = await loginWithUsername(username, password, role);
       if (!data.ok) {
         setError(data.message || "비밀번호가 틀렸습니다.");
         return;
       }
-      router.replace("/exam/2025-03-I/");
+      router.replace(data.role === "student" ? "/solo/" : "/exam/2025-03-I/");
     } catch {
       setError("비밀번호가 틀렸습니다.");
     } finally {
@@ -73,8 +116,16 @@ export function LoginForm() {
   }
 
   return (
-    <AuthShell title="교사 로그인" subtitle="아이디와 비밀번호로 교실 시험장을 엽니다.">
+    <AuthShell
+      title="로그인"
+      subtitle={
+        role === "student"
+          ? "학생으로 기출학습에 들어옵니다."
+          : "교사로 교실 시험장에 들어옵니다."
+      }
+    >
       <form onSubmit={onSubmit} className="space-y-4">
+        <RolePick role={role} onChange={setRole} />
         <Field label="아이디 입력">
           <TextField
             autoComplete="username"
@@ -113,6 +164,7 @@ export function LoginForm() {
 
 export function SignupForm() {
   const router = useRouter();
+  const [role, setRole] = useState<UserRole>("student");
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -151,6 +203,7 @@ export function SignupForm() {
         password,
         username: username.trim().toLowerCase(),
         full_name: fullName.trim(),
+        role,
       });
       if (!result.ok) {
         setError(result.message);
@@ -160,7 +213,7 @@ export function SignupForm() {
         setInfo("가입이 완료되었습니다. 로그인에서 아이디로 들어와 주세요.");
         return;
       }
-      router.replace("/admin/");
+      router.replace(role === "student" ? "/solo/" : "/admin/");
     } catch (error) {
       setError(networkErrorMessage(error));
     } finally {
@@ -170,10 +223,15 @@ export function SignupForm() {
 
   return (
     <AuthShell
-      title="교사 회원가입"
-      subtitle="이름과 아이디, 복구용 이메일, 비밀번호를 등록합니다."
+      title={role === "student" ? "학생 회원가입" : "교사 회원가입"}
+      subtitle={
+        role === "student"
+          ? "학생으로 가입하면 기출학습과 보관소를 이용합니다."
+          : "교사로 가입하면 교실 시험장과 채점을 이용합니다."
+      }
     >
       <form onSubmit={onSubmit} className="space-y-4">
+        <RolePick role={role} onChange={setRole} />
         <Field label="이름">
           <TextField
             value={fullName}
@@ -320,7 +378,8 @@ export function ResetPasswordForm() {
         setError("재설정 세션이 만료되었습니다. 메일을 다시 받아 주세요.");
         return;
       }
-      router.replace("/exam/2025-03-I/");
+      const profile = await getProfile();
+      router.replace(profile?.role === "student" ? "/solo/" : "/exam/2025-03-I/");
     } catch (error) {
       setError(networkErrorMessage(error));
     } finally {

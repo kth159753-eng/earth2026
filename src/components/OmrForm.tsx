@@ -78,8 +78,8 @@ export function OmrForm({
         </button>
       ) : null}
 
-      <form onSubmit={onSubmit} className="min-h-0 flex-1">
-        <div className="h-[min(82dvh,820px)]">
+      <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-[28rem] flex-1 sm:min-h-[36rem]">
           <OmrCardSheet
             title={session?.label ?? "모의고사"}
             subtitle={`${gradeLabel(meta.grade)} ${classLabel(meta.class_number)} · 이름 없이 번호만`}

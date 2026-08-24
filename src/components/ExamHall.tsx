@@ -6,6 +6,12 @@ import { readActiveClass, subscribeActiveClass, writeActiveClass } from "@/lib/a
 import { siblingSession, type ExamSession } from "@/lib/exams";
 import type { ClassConfig } from "@/lib/types";
 import { omrUrl as buildOmrUrl } from "@/lib/config";
+import {
+  playFiveLeftAlert,
+  playTenLeftAlert,
+  stopExamAlerts,
+  unlockExamAudio,
+} from "@/lib/exam-alerts";
 import { classLabel, cn, formatClock, gradeLabel } from "@/lib/utils";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -41,7 +47,9 @@ const SWEAT_COUNT = { calm: 0, warn: 8, hot: 16, panic: 28 } as const;
 const SWEAT_DURATION = { warn: 2.1, hot: 1.35, panic: 0.75 } as const;
 
 function SweatDrops({ level }: { level: Exclude<ReturnType<typeof clockTension>, "calm"> }) {
-  const count = SWEAT_COUNT[level];
+  const coarse =
+    typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const count = coarse ? Math.ceil(SWEAT_COUNT[level] / 2) : SWEAT_COUNT[level];
   const duration = SWEAT_DURATION[level];
   return (
     <div className="sweat-layer" aria-hidden>
@@ -122,6 +130,9 @@ export function ExamHall({ session, classes }: Props) {
   const [alarm, setAlarm] = useState(false);
   const [omrUrl, setOmrUrl] = useState("");
   const endAt = useRef<number | null>(null);
+  const alertPrev = useRef(30 * 60);
+  const fired10 = useRef(false);
+  const fired5 = useRef(false);
 
   useEffect(() => {
     if (classReady || classes.length === 0) return;
@@ -247,15 +258,21 @@ export function ExamHall({ session, classes }: Props) {
     setAlarm(false);
     setRunning(false);
     endAt.current = null;
+    fired10.current = false;
+    fired5.current = false;
+    alertPrev.current = next;
+    stopExamAlerts();
   }
 
   function start() {
+    unlockExamAudio();
     if (remaining <= 0) applyDuration();
     const next = remaining <= 0 ? hours * 3600 + minutes * 60 + seconds : remaining;
     endAt.current = Date.now() + next * 1000;
     setRemaining(next);
     setAlarm(false);
     setRunning(true);
+    alertPrev.current = next;
   }
 
   function pause() {
@@ -288,17 +305,37 @@ export function ExamHall({ session, classes }: Props) {
   function toggleImmersive() {
     if (immersive) {
       setImmersive(false);
+      stopExamAlerts();
       leaveFullscreen();
       return;
     }
+    unlockExamAudio();
     setImmersive(true);
     enterFullscreen();
   }
 
   useEffect(() => {
+    if (!immersive || !running) {
+      alertPrev.current = remaining;
+      return;
+    }
+    const prev = alertPrev.current;
+    alertPrev.current = remaining;
+    if (!fired10.current && remaining > 0 && (remaining === 600 || (prev > 600 && remaining <= 600))) {
+      fired10.current = true;
+      void playTenLeftAlert();
+    }
+    if (!fired5.current && remaining > 0 && (remaining === 300 || (prev > 300 && remaining <= 300))) {
+      fired5.current = true;
+      void playFiveLeftAlert();
+    }
+  }, [immersive, remaining, running]);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setImmersive(false);
+        stopExamAlerts();
         leaveFullscreen();
       }
     };
@@ -307,12 +344,12 @@ export function ExamHall({ session, classes }: Props) {
   }, []);
 
   return (
-    <div className="relative isolate min-h-[calc(100dvh-72px)] overflow-x-hidden overflow-y-auto bg-[#141414] pb-[env(safe-area-inset-bottom)]">
+    <div className="relative isolate flex min-h-[calc(100dvh-72px)] flex-col overflow-x-hidden bg-[#141414] pb-[env(safe-area-inset-bottom)] lg:h-[calc(100dvh-72px)] lg:overflow-hidden">
       <div className="starfield" />
       <div className="vignette" />
 
-      <div className="relative mx-auto flex h-full w-full max-w-[1400px] flex-col gap-3 px-3 py-3 sm:gap-4 sm:px-[3%] sm:py-4 lg:py-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="relative mx-auto flex min-h-0 w-full max-w-[1760px] flex-1 flex-col gap-3 px-3 py-3 sm:gap-4 sm:px-[3%] sm:py-4">
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-[22px] font-bold leading-tight text-white sm:text-[28px]">
               {session.label}
@@ -330,26 +367,26 @@ export function ExamHall({ session, classes }: Props) {
           </button>
         </div>
 
-        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[1fr_300px]">
+        <div className="grid min-h-0 flex-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.52fr)] xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.5fr)]">
           <section
             className={cn(
-              "relative flex min-h-[52dvh] flex-col justify-center overflow-hidden rounded-[4px] bg-black px-3 py-6 text-center sm:min-h-[58vh] sm:px-8 sm:py-8",
+              "relative flex min-h-[38dvh] flex-col justify-center overflow-hidden rounded-[4px] bg-black px-3 py-5 text-center sm:min-h-[46dvh] sm:px-6 sm:py-7 lg:h-full lg:min-h-0 lg:px-8 lg:py-8",
               alarm && "alarm-flash",
             )}
           >
-            <p className="text-base font-bold text-[#c8c8c8] sm:text-lg">남은 시간</p>
-            <div className="mt-3" style={{ fontSize: "clamp(3.75rem, 20vw, 14rem)" }}>
+            <p className="text-sm font-bold text-[#c8c8c8] sm:text-lg">남은 시간</p>
+            <div className="mt-2 sm:mt-3" style={{ fontSize: "clamp(2.6rem, 16vw, 14rem)" }}>
               <ClockFace display={display} remaining={remaining} alarm={alarm} />
             </div>
-            <div className="nf-progress mx-auto mt-6 h-2 w-full max-w-3xl sm:mt-8">
+            <div className="nf-progress mx-auto mt-4 h-2 w-full max-w-3xl sm:mt-8">
               <span style={{ width: `${progress * 100}%` }} />
             </div>
-            <div className="mx-auto mt-6 grid w-full max-w-lg grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
+            <div className="mx-auto mt-4 grid w-full max-w-lg grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
               <TimeField label="시" value={hours} max={3} onChange={setHours} />
               <TimeField label="분" value={minutes} max={59} onChange={setMinutes} />
               <TimeField label="초" value={seconds} max={59} onChange={setSeconds} />
             </div>
-            <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="mt-4 flex flex-col items-stretch justify-center gap-2 sm:mt-6 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
               <HallButton onClick={applyDuration}>시간 적용</HallButton>
               <PlayPauseButton running={running} onClick={running ? pause : start} />
               <HallButton onClick={reset}>리셋</HallButton>
@@ -359,7 +396,7 @@ export function ExamHall({ session, classes }: Props) {
             ) : null}
           </section>
 
-          <aside className="rounded-[4px] bg-[#1f1f1f] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+          <aside className="flex min-h-0 flex-col rounded-[4px] bg-[#1f1f1f] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:p-5 lg:h-full">
             {classes.length === 0 ? (
               <p className="text-sm leading-6 text-[#b3b3b3]">
                 관리자 페이지에서 학년과 학급을 먼저 설정하면 학급별 QR이 생성됩니다.{" "}
@@ -369,51 +406,57 @@ export function ExamHall({ session, classes }: Props) {
               </p>
             ) : (
               <>
-                <IdentityRow
-                  grade={grade}
-                  classNumber={classNumber}
-                  onGrade={setGrade}
-                  onClass={(value) => {
-                    const available = classes.filter((row) => row.grade === grade);
-                    const exists = available.some((row) => row.class_number === value);
-                    setClassNumber(exists ? value : available[0]?.class_number ?? value);
-                  }}
-                />
+                <div className="shrink-0">
+                  <IdentityRow
+                    grade={grade}
+                    classNumber={classNumber}
+                    onGrade={setGrade}
+                    onClass={(value) => {
+                      const available = classes.filter((row) => row.grade === grade);
+                      const exists = available.some((row) => row.class_number === value);
+                      setClassNumber(exists ? value : available[0]?.class_number ?? value);
+                    }}
+                  />
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (omrUrl) void navigator.clipboard.writeText(omrUrl);
-                  }}
-                  className="mt-4 flex h-11 w-full items-center justify-center rounded-[4px] bg-[#e50914] text-sm font-bold text-white hover:bg-[#c00710]"
-                >
-                  [OMR 입력]
-                </button>
-                <p className="mt-2 text-center text-[11px] text-[#808080]">
-                  단추를 누르면 학생 링크가 복사됩니다
-                </p>
-
-                <div className="mt-4 rounded-[2px] bg-white p-3">
-                  {code ? (
-                    <QRCodeSVG
-                      value={omrUrl}
-                      size={256}
-                      level="M"
-                      className="mx-auto h-auto w-full"
-                      bgColor="#ffffff"
-                      fgColor="#141414"
-                    />
-                  ) : (
-                    <div className="grid h-56 place-items-center text-sm text-[#808080]">
-                      QR 준비 중...
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (omrUrl) void navigator.clipboard.writeText(omrUrl);
+                    }}
+                    className="mt-3 flex h-12 w-full items-center justify-center rounded-[4px] bg-[#e50914] text-sm font-bold text-white hover:bg-[#c00710] sm:mt-4"
+                  >
+                    [OMR 입력]
+                  </button>
+                  <p className="mt-2 text-center text-[11px] text-[#808080]">
+                    단추를 누르면 학생 링크가 복사됩니다
+                  </p>
                 </div>
-                <p className="mt-3 text-center text-sm text-white">
+
+                <div className="relative mt-3 min-h-[12rem] flex-1 sm:mt-4 sm:min-h-[16rem] lg:min-h-[220px]">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="aspect-square h-full max-h-full w-auto max-w-full rounded-[2px] bg-white p-[6%]">
+                      {code ? (
+                        <QRCodeSVG
+                          value={omrUrl}
+                          size={256}
+                          level="M"
+                          className="h-full w-full"
+                          bgColor="#ffffff"
+                          fgColor="#141414"
+                        />
+                      ) : (
+                        <div className="grid h-full place-items-center text-sm text-[#808080]">
+                          QR 준비 중...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-3 shrink-0 text-center text-sm text-white">
                   {gradeLabel(grade)} {classLabel(classNumber)}
                   {pairSession ? " · 지I / 지II 선택" : ""}
                 </p>
-                <p className="mt-1 text-center font-mono text-[11px] text-[#555]">
+                <p className="mt-1 shrink-0 text-center font-mono text-[11px] text-[#555]">
                   {code ?? "--------"}
                 </p>
               </>
@@ -448,26 +491,30 @@ export function ExamHall({ session, classes }: Props) {
                   </p>
                 </div>
 
-                <div className="mt-6 grid w-full grid-cols-[minmax(84px,150px)_minmax(0,1fr)_minmax(84px,150px)] items-center gap-2 sm:mt-8 sm:grid-cols-[minmax(110px,176px)_minmax(0,1fr)_minmax(110px,176px)] sm:gap-6 lg:gap-8">
-                  <ImmersiveQr label="지I" url={urlI} />
-                  <div className="min-w-0 text-center">
+                <div className="mt-4 grid w-full grid-cols-2 items-center gap-3 sm:mt-8 sm:grid-cols-[minmax(110px,176px)_minmax(0,1fr)_minmax(110px,176px)] sm:gap-6 lg:gap-8">
+                  <div className="col-span-2 min-w-0 text-center sm:col-auto sm:order-2">
                     <p className="mb-2 text-[11px] tracking-[0.28em] text-[#6a6a6a] sm:text-xs">
                       남은 시간
                     </p>
                     <div
                       className="leading-none"
-                      style={{ fontSize: "clamp(5.25rem, 22vw, 16.5rem)" }}
+                      style={{ fontSize: "clamp(4.4rem, 23vw, 19.5rem)" }}
                     >
                       <ClockFace display={display} remaining={remaining} alarm={alarm} />
                     </div>
-                    <div className="mx-auto mt-6 h-[3px] w-[min(100%,36rem)] overflow-hidden rounded-full bg-white/10">
+                    <div className="mx-auto mt-4 h-[3px] w-[min(100%,36rem)] overflow-hidden rounded-full bg-white/10 sm:mt-6">
                       <div
                         className="h-full rounded-full bg-[#e50914]"
                         style={{ width: `${progress * 100}%` }}
                       />
                     </div>
                   </div>
-                  <ImmersiveQr label="지II" url={urlII} />
+                  <div className="sm:order-1">
+                    <ImmersiveQr label="지I" url={urlI} />
+                  </div>
+                  <div className="sm:order-3">
+                    <ImmersiveQr label="지II" url={urlII} />
+                  </div>
                 </div>
 
                 <div className="mt-8 sm:mt-10">
@@ -501,14 +548,6 @@ function ImmersiveQr({
 }) {
   return (
     <div className="mx-auto w-full">
-      <p
-        className={cn(
-          "mb-2 text-center text-[11px] font-semibold tracking-[0.22em] sm:text-xs",
-          url ? "text-[#8a8a8a]" : "text-[#6a4a4a]",
-        )}
-      >
-        {label}
-      </p>
       {url ? (
         <div className="aspect-square rounded-[6px] bg-white p-[8%]">
           <QRCodeSVG
@@ -537,6 +576,9 @@ function ImmersiveQr({
           </div>
         </div>
       )}
+      <p className="mt-2.5 text-center text-[20px] font-bold tracking-[0.18em] text-[#ffd400] sm:text-[21px]">
+        {label}
+      </p>
     </div>
   );
 }
@@ -578,7 +620,7 @@ function HallButton({
     <button
       type="button"
       onClick={onClick}
-      className="h-14 w-full min-w-[120px] rounded-[4px] bg-[#3d3d3d] px-6 text-base font-bold text-white hover:bg-[#525252] sm:w-auto"
+      className="h-12 w-full min-w-[120px] rounded-[4px] bg-[#3d3d3d] px-6 text-base font-bold text-white hover:bg-[#525252] sm:h-14 sm:w-auto"
     >
       {children}
     </button>
@@ -603,7 +645,7 @@ function PlayPauseButton({
         "inline-flex items-center justify-center gap-3 bg-[#e50914] font-bold text-white hover:bg-[#c00710]",
         compact
           ? "h-12 rounded-[4px] px-6 text-sm sm:h-12 sm:w-auto"
-          : "h-14 w-full rounded-full px-7 text-lg sm:h-16 sm:w-auto",
+          : "h-12 w-full rounded-full px-7 text-base sm:h-16 sm:w-auto sm:text-lg",
       )}
     >
       {running ? (

@@ -7,10 +7,11 @@ import {
   getAnswerKey,
   getClassConfigs,
   getSubmissionsForSession,
+  getTeacherScoreReport,
   summarizeClass,
 } from "@/lib/data";
 import { DEFAULT_SESSION_ID, getSession } from "@/lib/exams";
-import type { ClassConfig, ClassSummary, GradedRow } from "@/lib/types";
+import type { ClassConfig, ClassSummary, GradedRow, ScoreReport } from "@/lib/types";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 
@@ -32,16 +33,19 @@ function AdminInner() {
   const [points, setPoints] = useState<number[]>([]);
   const [gradeCuts, setGradeCuts] = useState<number[]>([]);
   const [dashboard, setDashboard] = useState<DashboardClass[]>([]);
+  const [report, setReport] = useState<ScoreReport>({ students: [], sessionIds: [] });
   const [ready, setReady] = useState(false);
 
   const load = useCallback(async () => {
-    const [configs, key, { submissions }] = await Promise.all([
-      getClassConfigs(),
+    const configs = await getClassConfigs();
+    const [key, { submissions }, scoreReport] = await Promise.all([
       getAnswerKey(session.id),
       getSubmissionsForSession(session.id),
+      getTeacherScoreReport(configs),
     ]);
     const answerKey = key ?? fallbackAnswerKey(session.id, "");
     setClassConfigs(configs);
+    setReport(scoreReport);
     setAnswers(answerKey.answers);
     setPoints(answerKey.points);
     let cuts = answerKey.grade_cuts ?? [];
@@ -93,6 +97,7 @@ function AdminInner() {
       initialPoints={points}
       initialCuts={gradeCuts}
       dashboard={dashboard}
+      report={report}
       onReload={load}
     />
   );

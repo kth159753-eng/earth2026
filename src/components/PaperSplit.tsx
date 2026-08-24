@@ -2,6 +2,7 @@
 
 import { saveExamAsset } from "@/lib/actions/teacher";
 import { examViewerUrls, type ExamSession } from "@/lib/exams";
+import { useProfile } from "@/lib/profile-context";
 import { createClient } from "@/lib/supabase/client";
 import { Notice } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -14,9 +15,12 @@ type Props = {
 };
 
 export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
+  const profile = useProfile();
+  const readOnly = profile?.role === "student";
   const files = useMemo(() => examViewerUrls(session), [session]);
 
   useEffect(() => {
+    if (!window.matchMedia("(min-width: 1024px)").matches) return;
     const hrefs = [files.paper, files.solution].filter(Boolean) as string[];
     const nodes = hrefs.map((href) => {
       const link = document.createElement("link");
@@ -71,6 +75,7 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
         <div className={cn(pane === "paper" ? "block" : "hidden lg:block")}>
         <PaperPane
           title="시험지"
+          readOnly={readOnly}
           active={pane === "paper"}
           url={paper}
           fileUrl={files.paper}
@@ -90,6 +95,7 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
         <div className={cn(pane === "solution" ? "block" : "hidden lg:block")}>
         <PaperPane
           title="해설지"
+          readOnly={readOnly}
           active={pane === "solution"}
           url={solution}
           fileUrl={files.solution}
@@ -131,6 +137,7 @@ function useWideScreen() {
 
 function PaperPane({
   title,
+  readOnly = false,
   active,
   url,
   fileUrl,
@@ -138,6 +145,7 @@ function PaperPane({
   onUploaded,
 }: {
   title: string;
+  readOnly?: boolean;
   active: boolean;
   url: string | null;
   fileUrl: string | null;
@@ -189,31 +197,34 @@ function PaperPane({
               새 탭
             </a>
           ) : null}
-          <label className="cursor-pointer">
-            <input
-              type="file"
-              accept="application/pdf,image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void upload(file);
-              }}
-            />
-            <span className="inline-flex h-8 items-center rounded-lg bg-white/8 px-3 text-xs">
-              {pending ? "올리는 중..." : "파일 올리기"}
-            </span>
-          </label>
+          {readOnly ? null : (
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void upload(file);
+                }}
+              />
+              <span className="inline-flex h-8 items-center rounded-lg bg-white/8 px-3 text-xs">
+                {pending ? "올리는 중..." : "파일 올리기"}
+              </span>
+            </label>
+          )}
         </div>
       </div>
       <div className="min-h-[52dvh] bg-[#0a0d12] md:min-h-[62dvh] lg:min-h-[68vh]">
         {src && visible ? (
           isImageSrc(src) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt={title} className="mx-auto max-h-[58dvh] w-full object-contain md:max-h-[70dvh] lg:max-h-[78vh]" />
+            <img src={src} alt={title} loading="lazy" decoding="async" className="mx-auto max-h-[58dvh] w-full object-contain md:max-h-[70dvh] lg:max-h-[78vh]" />
           ) : (
             <iframe
               title={title}
               src={src}
+              loading="lazy"
               className="h-[58dvh] w-full border-0 bg-white md:h-[70dvh] lg:h-[78vh]"
               allowFullScreen
             />

@@ -1,5 +1,5 @@
-import { DEFAULT_SESSION_ID, defaultPoints, emptyAnswers } from "@/lib/exams";
-import { defaultGradeCuts } from "@/lib/grades";
+import { DEFAULT_SESSION_ID, EXAM_SESSIONS, defaultPoints, emptyAnswers } from "@/lib/exams";
+import { bandFromScore, defaultGradeCuts } from "@/lib/grades";
 import {
   isCompleteAnswers,
   isCompleteCuts,
@@ -13,8 +13,11 @@ import type {
   ClassSummary,
   GradedRow,
   Profile,
+  ReportStudent,
+  ScoreReport,
   SoloArchive,
   Submission,
+  UserRole,
 } from "@/lib/types";
 import { average } from "@/lib/utils";
 
@@ -30,58 +33,99 @@ function metaText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function roleFromMeta(value: unknown, fallback: UserRole = "teacher"): UserRole {
+  return value === "student" || value === "teacher" ? value : fallback;
+}
+
 function profileFromUser(
   user: { id: string; user_metadata?: Record<string, unknown> },
-  input?: { username?: string; full_name?: string },
+  input?: { username?: string; full_name?: string; role?: UserRole },
 ): Profile {
   const fromMetaName = metaText(user.user_metadata?.full_name);
   const fromMetaUser = metaText(user.user_metadata?.username).toLowerCase();
-  const fullName = (input?.full_name || fromMetaName || "교사").trim().slice(0, 20);
+  const fullName = (input?.full_name || fromMetaName || "사용자").trim().slice(0, 20);
   const requested = (input?.username || fromMetaUser).trim().toLowerCase();
   const fallback = `user_${user.id.replace(/-/g, "").slice(0, 8)}`;
   return {
     id: user.id,
     username: /^[a-z0-9_]{4,20}$/.test(requested) ? requested : fallback,
-    full_name: fullName.length >= 2 ? fullName : "교사",
+    full_name: fullName.length >= 2 ? fullName : "사용자",
+    role: input?.role ?? roleFromMeta(user.user_metadata?.role),
+  };
+}
+
+function withRole(row: { id: string; username: string; full_name: string; role?: unknown }, fallback: UserRole): Profile {
+  return {
+    id: row.id,
+    username: row.username,
+    full_name: row.full_name,
+    role: roleFromMeta(row.role, fallback),
   };
 }
 
 export async function ensureTeacherProfile(input?: {
   username?: string;
   full_name?: string;
+  role?: UserRole;
 }): Promise<Profile | null> {
   try {
     const user = await currentUser();
     if (!user) return null;
     const fallback = profileFromUser(user, input);
     const supabase = createClient();
-    const { data: existing } = await supabase
+    const full = await supabase
       .from("profiles")
-      .select("id, username, full_name")
+      .select("id, username, full_name, role")
       .eq("id", user.id)
       .maybeSingle();
-    if (existing) return existing;
+    const existing = full.error
+      ? (
+          await supabase
+            .from("profiles")
+            .select("id, username, full_name")
+            .eq("id", user.id)
+            .maybeSingle()
+        ).data
+      : full.data;
+    if (existing) {
+      const explicitMeta =
+        user.user_metadata?.role === "student" || user.user_metadata?.role === "teacher";
+      const dbRole = roleFromMeta(existing.role, fallback.role);
+      const role = input?.role ?? (explicitMeta ? fallback.role : dbRole);
+      if (role !== dbRole) {
+        await supabase.from("profiles").update({ role }).eq("id", user.id);
+      }
+      return { ...withRole(existing, role), role };
+    }
 
     const write = async (nextUsername: string, nextName: string) => {
+      const payload = {
+        id: user.id,
+        username: nextUsername,
+        full_name: nextName,
+        role: fallback.role,
+      };
+      const withRoleCol = await supabase
+        .from("profiles")
+        .upsert(payload, { onConflict: "id" })
+        .select("id, username, full_name, role")
+        .maybeSingle();
+      if (!withRoleCol.error && withRoleCol.data) return withRole(withRoleCol.data, fallback.role);
       const { data, error } = await supabase
         .from("profiles")
         .upsert(
-          {
-            id: user.id,
-            username: nextUsername,
-            full_name: nextName,
-          },
+          { id: user.id, username: nextUsername, full_name: nextName },
           { onConflict: "id" },
         )
         .select("id, username, full_name")
         .maybeSingle();
-      if (error) return null;
-      return data;
+      if (error || !data) return null;
+      return withRole(data, fallback.role);
     };
 
     return (
       (await write(fallback.username, fallback.full_name)) ??
-      (await write(`user_${user.id.replace(/-/g, "").slice(0, 8)}`, "교사")) ??
+      (await write(`user_${user.id.replace(/-/g, "").slice(0, 8)}`, fallback.full_name)) ??
       fallback
     );
   } catch {
@@ -233,6 +277,128 @@ export async function getSubmissionsForSession(sessionId: string) {
   });
 
   return { codes, submissions };
+}
+
+export async function getTeacherScoreReport(configs: ClassConfig[]): Promise<ScoreReport> {
+  const user = await currentUser();
+  const supabase = createClient();
+  const archives = await listSoloArchives();
+  let codes: Array<{
+    id: string;
+    session_id: string;
+    grade: number;
+    class_number: number;
+  }> = [];
+  let submissions: Submission[] = [];
+
+  if (user) {
+    const { data: codeRows } = await supabase
+      .from("omr_codes")
+      .select("id, session_id, grade, class_number")
+      .eq("teacher_id", user.id);
+    codes = codeRows ?? [];
+    if (codes.length > 0) {
+      const { data } = await supabase
+        .from("submissions")
+        .select("id, omr_code_id, student_number, answers, score, wrong_questions, submitted_at")
+        .in(
+          "omr_code_id",
+          codes.map((code) => code.id),
+        );
+      submissions = data ?? [];
+    }
+  }
+
+  type Raw = {
+    sessionId: string;
+    grade: number;
+    classNumber: number;
+    studentNumber: number;
+    score: number | null;
+    submitted: boolean;
+  };
+  const raw = new Map<string, Raw>();
+  const put = (next: Raw, prefer = false) => {
+    const key = `${next.sessionId}|${next.grade}|${next.classNumber}|${next.studentNumber}`;
+    const prev = raw.get(key);
+    if (!prev) {
+      raw.set(key, next);
+      return;
+    }
+    if (prefer && next.score != null) raw.set(key, next);
+    else if (prev.score == null && next.score != null) raw.set(key, next);
+  };
+
+  const codeMap = new Map(codes.map((code) => [code.id, code]));
+  for (const row of submissions) {
+    const code = codeMap.get(row.omr_code_id);
+    if (!code) continue;
+    put(
+      {
+        sessionId: code.session_id,
+        grade: code.grade,
+        classNumber: code.class_number,
+        studentNumber: row.student_number,
+        score: row.score,
+        submitted: true,
+      },
+      true,
+    );
+  }
+  for (const row of archives) {
+    put({
+      sessionId: row.session_id,
+      grade: row.grade,
+      classNumber: row.class_number,
+      studentNumber: row.student_number,
+      score: row.score,
+      submitted: true,
+    });
+  }
+
+  const roster =
+    configs.length > 0
+      ? configs
+      : Array.from(
+          new Set(
+            [...raw.values()].map((item) => `${item.grade}-${item.classNumber}`),
+          ),
+        ).map((key) => {
+          const [grade, classNumber] = key.split("-").map(Number);
+          return { grade, class_number: classNumber, student_count: 40 };
+        });
+
+  const students = roster.flatMap((config) => {
+    const count = "student_count" in config ? config.student_count : 40;
+    return Array.from({ length: count }, (_, index) => {
+      const studentNumber = index + 1;
+      const bySession: ReportStudent["bySession"] = {};
+      for (const session of EXAM_SESSIONS) {
+        const cell = raw.get(
+          `${session.id}|${config.grade}|${config.class_number}|${studentNumber}`,
+        );
+        if (!cell) continue;
+        const cuts = officialCuts(session.id) ?? defaultGradeCuts(50);
+        bySession[session.id] = {
+          score: cell.score,
+          band: bandFromScore(cell.score, cuts),
+          submitted: cell.submitted,
+        };
+      }
+      return {
+        grade: config.grade,
+        classNumber: config.class_number,
+        studentNumber,
+        bySession,
+      };
+    });
+  });
+
+  const sessionIds = EXAM_SESSIONS.map((session) => session.id).filter((id) =>
+    students.some((student) => student.bySession[id]),
+  );
+
+  return { students, sessionIds };
 }
 
 export function buildRoster(

@@ -174,7 +174,7 @@ export function ActiveClassControl() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-10 shrink-0 items-center gap-2 rounded-[4px] border border-[#ffd400]/45 bg-[#ffd400]/10 px-2.5 text-left sm:h-11 sm:px-3"
+        className="flex h-10 shrink-0 items-center gap-1.5 rounded-[4px] border border-[#ffd400]/45 bg-[#ffd400]/10 px-2 text-left sm:h-11 sm:gap-2 sm:px-3"
         title="학급 바꾸기"
       >
         {active?.running ? (
@@ -183,7 +183,7 @@ export function ActiveClassControl() {
           <span className="h-2 w-2 shrink-0 rounded-full bg-[#ffd400]/45" />
         )}
         <span className="leading-none">
-          <span className="block text-[9px] font-bold tracking-[0.16em] text-[#ffe066]">학급</span>
+          <span className="hidden text-[9px] font-bold tracking-[0.16em] text-[#ffe066] sm:block">학급</span>
           <span className="block text-[13px] font-black text-[#ffd400] sm:text-sm">
             {active
               ? `${gradeLabel(active.grade)} ${classLabel(active.classNumber)}`

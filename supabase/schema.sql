@@ -11,10 +11,12 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   username text not null,
   full_name text not null,
+  role text not null default 'teacher',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint username_format check (username ~ '^[a-z0-9_]{4,20}$'),
-  constraint full_name_len check (char_length(full_name) between 2 and 20)
+  constraint full_name_len check (char_length(full_name) between 2 and 20),
+  constraint profiles_role_check check (role in ('teacher', 'student'))
 );
 
 create unique index if not exists profiles_username_unique
@@ -116,25 +118,30 @@ as $$
 declare
   v_username text;
   v_name text;
+  v_role text;
 begin
   v_username := lower(trim(coalesce(nullif(new.raw_user_meta_data->>'username', ''), '')));
   if v_username !~ '^[a-z0-9_]{4,20}$' then
     v_username := 'user_' || substr(replace(new.id::text, '-', ''), 1, 8);
   end if;
-  v_name := trim(coalesce(nullif(new.raw_user_meta_data->>'full_name', ''), '교사'));
+  v_name := trim(coalesce(nullif(new.raw_user_meta_data->>'full_name', ''), '사용자'));
   if char_length(v_name) < 2 or char_length(v_name) > 20 then
-    v_name := '교사';
+    v_name := '사용자';
+  end if;
+  v_role := lower(trim(coalesce(nullif(new.raw_user_meta_data->>'role', ''), 'teacher')));
+  if v_role not in ('teacher', 'student') then
+    v_role := 'teacher';
   end if;
 
-  insert into public.profiles (id, username, full_name)
-  values (new.id, v_username, v_name)
+  insert into public.profiles (id, username, full_name, role)
+  values (new.id, v_username, v_name, v_role)
   on conflict (id) do nothing;
   return new;
 exception
   when others then
     begin
       insert into public.profiles (id, username, full_name)
-      values (new.id, 'user_' || substr(replace(new.id::text, '-', ''), 1, 8), '교사')
+      values (new.id, 'user_' || substr(replace(new.id::text, '-', ''), 1, 8), '사용자')
       on conflict (id) do nothing;
     exception
       when others then

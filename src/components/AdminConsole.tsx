@@ -3,7 +3,8 @@
 import { gradeSession, saveAnswerKey, saveClassConfigs } from "@/lib/actions/teacher";
 import { CHOICE_COUNT, QUESTION_COUNT, defaultPoints, emptyAnswers } from "@/lib/exams";
 import { GRADE_TONES, bandFromScore, bandLabel, countBands, normalizeCuts } from "@/lib/grades";
-import type { ClassConfig, ClassSummary, GradedRow } from "@/lib/types";
+import { ScoreReportBoard } from "@/components/ScoreReport";
+import type { ClassConfig, ClassSummary, GradedRow, ScoreReport } from "@/lib/types";
 import { Button, Notice, SectionTitle } from "@/components/ui";
 import {
   classLabel,
@@ -15,7 +16,7 @@ import {
 } from "@/lib/utils";
 import { useMemo, useState } from "react";
 
-type Tab = "classes" | "omr" | "answers" | "compare";
+type Tab = "report" | "classes" | "omr" | "answers" | "compare";
 
 type DashboardClass = {
   grade: number;
@@ -33,6 +34,7 @@ export function AdminConsole({
   initialPoints,
   initialCuts,
   dashboard,
+  report,
   onReload,
 }: {
   sessionId: string;
@@ -42,9 +44,10 @@ export function AdminConsole({
   initialPoints: number[];
   initialCuts: number[];
   dashboard: DashboardClass[];
+  report: ScoreReport;
   onReload?: () => void | Promise<void>;
 }) {
-  const [tab, setTab] = useState<Tab>("omr");
+  const [tab, setTab] = useState<Tab>("report");
 
   return (
     <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-5">
@@ -52,16 +55,17 @@ export function AdminConsole({
         {sessionLabel}
       </h1>
       <p className="mt-1 text-sm text-stone-400">
-        학급 설정, 제출 현황, 정답·배점, 비교를 한 화면에서 관리합니다.
+        회차별 성적 보고서, 채점, 학급 설정, 정답·배점을 한 화면에서 관리합니다.
       </p>
 
       <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {(
           [
-            ["omr", "OMR 대시보드"],
-            ["answers", "정답 · 배점"],
+            ["report", "관리자 페이지"],
+            ["omr", "채점하기"],
             ["compare", "학년 · 학급 비교"],
             ["classes", "학년 · 학급 설정"],
+            ["answers", "정답 · 배점"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -69,7 +73,7 @@ export function AdminConsole({
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "min-h-11 rounded-[4px] px-3 py-2 text-sm sm:px-4",
+              "min-h-11 rounded-[4px] px-2.5 py-2 text-[13px] sm:px-4 sm:text-sm",
               tab === id ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
             )}
           >
@@ -79,6 +83,7 @@ export function AdminConsole({
       </div>
 
       <div className="mt-6">
+        {tab === "report" ? <ScoreReportBoard report={report} /> : null}
         {tab === "classes" ? (
           <ClassSettings initial={classConfigs} onReload={onReload} />
         ) : null}
@@ -697,67 +702,75 @@ function OmrBoard({
         </div>
       </div>
 
-      <div className="-mx-3 overflow-x-auto rounded-[4px] border-y border-white/8 sm:mx-0 sm:border">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-white/3 text-stone-500">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium">번호</th>
-              <th className="px-4 py-3 text-left font-medium">제출</th>
-              <th className="px-4 py-3 text-left font-medium">점수</th>
-              <th className="px-4 py-3 text-left font-medium">등급</th>
-              <th className="px-4 py-3 text-left font-medium">틀린 문제</th>
-            </tr>
-          </thead>
-          <tbody>
-            {current?.rows.map((row) => {
-              const band = bandFromScore(row.score, cuts);
-              return (
-                <tr key={row.studentNumber} className="border-t border-white/5">
-                  <td className="px-4 py-3">{studentLabel(row.studentNumber)}</td>
-                  <td className="px-4 py-3 text-stone-400">
+      <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-3 sm:p-4">
+        <p className="mb-3 text-sm text-stone-400">학생 현황</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+          {(current?.rows ?? []).map((row) => {
+            const band = bandFromScore(row.score, cuts);
+            const graded = row.submitted && row.score !== null;
+            return (
+              <article
+                key={row.studentNumber}
+                className={cn(
+                  "rounded-[4px] border px-2.5 py-2.5",
+                  row.submitted
+                    ? "border-white/12 bg-white/[0.05]"
+                    : "border-white/[0.06] bg-black/25",
+                )}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-sm font-black tabular-nums text-white">
+                    {studentLabel(row.studentNumber)}
+                  </p>
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold",
+                      row.submitted ? "text-[#46d369]" : "text-[#808080]",
+                    )}
+                  >
                     {row.submitted ? "제출" : "미제출"}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-white">
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-end justify-between gap-1">
+                  <p className="text-lg font-black leading-none tabular-nums text-white">
                     {formatScore(row.score)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {band ? (
-                      <span
-                        className="inline-flex rounded-[4px] px-2 py-0.5 text-xs font-bold"
-                        style={{
-                          color: GRADE_TONES[band - 1],
-                          background: `${GRADE_TONES[band - 1]}22`,
-                        }}
-                      >
-                        {bandLabel(band)}
-                      </span>
-                    ) : (
-                      <span className="text-stone-600">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {row.wrongQuestions.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {row.wrongQuestions.map((question) => (
-                          <span
-                            key={question}
-                            className="rounded-md bg-rose-950/70 px-2 py-0.5 text-xs text-rose-100"
-                          >
-                            {question}
-                          </span>
-                        ))}
-                      </div>
-                    ) : row.submitted && row.score !== null ? (
-                      <span className="text-teal">만점</span>
-                    ) : (
-                      <span className="text-stone-600">채점 전</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </p>
+                  {band ? (
+                    <span
+                      className="rounded-[4px] px-1.5 py-0.5 text-[10px] font-bold"
+                      style={{
+                        color: GRADE_TONES[band - 1],
+                        background: `${GRADE_TONES[band - 1]}22`,
+                      }}
+                    >
+                      {bandLabel(band)}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-[#555]">—</span>
+                  )}
+                </div>
+                <div className="mt-2 min-h-5">
+                  {row.wrongQuestions.length > 0 ? (
+                    <div className="flex flex-wrap gap-0.5">
+                      {row.wrongQuestions.map((question) => (
+                        <span
+                          key={question}
+                          className="rounded-[3px] bg-rose-950/70 px-1 py-px text-[10px] font-bold text-rose-100"
+                        >
+                          {question}
+                        </span>
+                      ))}
+                    </div>
+                  ) : graded ? (
+                    <p className="text-[10px] font-bold text-[#46d369]">만점</p>
+                  ) : (
+                    <p className="text-[10px] text-[#555]">채점 전</p>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

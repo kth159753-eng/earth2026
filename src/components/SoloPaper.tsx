@@ -2,6 +2,7 @@
 
 import { BASE_PATH } from "@/lib/config";
 import { QUESTION_COUNT } from "@/lib/exams";
+import { noteInkPointer, shouldAcceptInk } from "@/lib/ink-pointer";
 import {
   buildPageOmrMap,
   hitChoiceBox,
@@ -43,12 +44,25 @@ function loadPdf(src: string) {
   return pending;
 }
 
-const MAX_BITMAP_WIDTH = 3200;
-
 function bitmapWidth(cssWidth: number) {
-  const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
-  const scale = Math.min(Math.max(dpr, 1), cssWidth < 520 ? 2 : 2.5);
-  return Math.min(MAX_BITMAP_WIDTH, Math.max(720, Math.round(cssWidth * scale)));
+  if (typeof window === "undefined") return Math.round(cssWidth * 1.5);
+  const dpr = window.devicePixelRatio || 1;
+  const narrow = window.innerWidth < 768;
+  const tablet = window.innerWidth < 1024;
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const max = narrow ? 1400 : tablet ? 1800 : 2400;
+  const scale = coarse || narrow ? Math.min(Math.max(dpr, 1), 1.75) : Math.min(Math.max(dpr, 1), 2.25);
+  return Math.min(max, Math.max(640, Math.round(cssWidth * scale)));
+}
+
+function yieldPaint() {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
 }
 
 export type InkStroke = {
@@ -79,12 +93,12 @@ type PageSize = { width: number; height: number };
 const EMPTY_STROKES: InkStroke[] = [];
 
 export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom = 1 }: Props) {
-  const hostRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [maps, setMaps] = useState<PageOmrMap[]>([]);
   const [error, setError] = useState("");
-  const [renderWidth, setRenderWidth] = useState(0);
+  const [baseWidth, setBaseWidth] = useState(0);
   const widthRef = useRef(0);
 
   useEffect(() => {
@@ -92,22 +106,21 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
     setSizes([]);
     setMaps([]);
     setError("");
-    widthRef.current = 0;
   }, [src]);
 
   useEffect(() => {
-    const host = hostRef.current;
+    const host = measureRef.current;
     if (!host) return;
     let timer = 0;
     const apply = (width: number) => {
       if (width <= 0) return;
-      if (Math.abs(width - widthRef.current) < 12 && widthRef.current) return;
+      if (Math.abs(width - widthRef.current) < 24 && widthRef.current) return;
       widthRef.current = width;
-      setRenderWidth(width);
+      setBaseWidth(width);
     };
     const update = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => apply(Math.floor(host.clientWidth)), 160);
+      timer = window.setTimeout(() => apply(Math.floor(host.clientWidth)), 220);
     };
     apply(Math.floor(host.clientWidth));
     const observer = new ResizeObserver(update);
@@ -116,12 +129,16 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
       window.clearTimeout(timer);
       observer.disconnect();
     };
-  }, [src, zoom]);
+  }, [src]);
+
+  const renderWidth = Math.min(baseWidth || 860, 860);
 
   useEffect(() => {
-    if (!renderWidth) return;
+    if (!baseWidth) return;
     let cancelled = false;
     const pixelWidth = bitmapWidth(renderWidth);
+    const coarse =
+      typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
     async function render() {
       setError("");
@@ -141,8 +158,16 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
           const context = canvas.getContext("2d", { alpha: false });
           if (!context) continue;
           context.imageSmoothingEnabled = true;
-          context.imageSmoothingQuality = "high";
+          context.imageSmoothingQuality = coarse ? "medium" : "high";
           await page.render({ canvasContext: context, viewport, intent: "display" }).promise;
+          nextPages.push(canvas);
+          nextSizes.push({ width: canvas.width, height: canvas.height });
+          if (!cancelled) {
+            setPages(nextPages.slice());
+            setSizes(nextSizes.slice());
+          }
+          await yieldPaint();
+          if (cancelled) return;
           const content = await page.getTextContent();
           const items = content.items.flatMap((item) => {
             if (!("str" in item) || !item.str) return [];
@@ -155,14 +180,9 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
               },
             ];
           });
-          nextPages.push(canvas);
-          nextSizes.push({ width: canvas.width, height: canvas.height });
           nextMaps.push(buildPageOmrMap(items));
-          if (!cancelled) {
-            setPages(nextPages.slice());
-            setSizes(nextSizes.slice());
-            setMaps(nextMaps.slice());
-          }
+          if (!cancelled) setMaps(nextMaps.slice());
+          if (index < document.numPages) await yieldPaint();
         }
       } catch {
         if (!cancelled) setError("시험지를 불러오지 못했습니다.");
@@ -173,7 +193,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
     return () => {
       cancelled = true;
     };
-  }, [src, renderWidth]);
+  }, [src, baseWidth, renderWidth]);
 
   const strokesByPage = useMemo(() => {
     const grouped = new Map<number, InkStroke[]>();
@@ -186,10 +206,10 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
   }, [strokes]);
 
   return (
+    <div ref={measureRef} className="w-full">
     <div
-      ref={hostRef}
-      className="mx-auto w-full space-y-3 sm:space-y-4"
-      style={{ maxWidth: Math.round(860 * zoom) }}
+      className="mx-auto space-y-3 sm:space-y-4"
+      style={{ width: Math.max(1, Math.round(renderWidth * zoom)) }}
     >
       {error ? <p className="py-20 text-center text-sm text-[#808080]">{error}</p> : null}
       {!error && pages.length === 0 ? (
@@ -210,6 +230,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
           omrMap={maps[index]}
         />
       ))}
+    </div>
     </div>
   );
 }
@@ -240,6 +261,8 @@ const PaperPage = memo(function PaperPage({
   const frameRef = useRef<HTMLDivElement>(null);
   const inkRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef<InkStroke | null>(null);
+  const drawingId = useRef<number | null>(null);
+  const drawingType = useRef<string>("");
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -256,7 +279,7 @@ const PaperPage = memo(function PaperPage({
     if (!canvas || !size) return;
     canvas.width = size.width;
     canvas.height = size.height;
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { desynchronized: true, alpha: true });
     if (!context) return;
     context.clearRect(0, 0, canvas.width, canvas.height);
     for (const stroke of strokes) {
@@ -264,20 +287,38 @@ const PaperPage = memo(function PaperPage({
     }
   }, [strokes, size]);
 
-  const pointFromEvent = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+  const pointFromClient = useCallback((clientX: number, clientY: number) => {
     const canvas = inkRef.current;
     if (!canvas) return null;
     const box = canvas.getBoundingClientRect();
+    if (!box.width || !box.height) return null;
     return {
-      x: (event.clientX - box.left) / box.width,
-      y: (event.clientY - box.top) / box.height,
+      x: (clientX - box.left) / box.width,
+      y: (clientY - box.top) / box.height,
     };
   }, []);
 
+  function discardStroke() {
+    drawing.current = null;
+    drawingId.current = null;
+    drawingType.current = "";
+  }
+
   function pointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
-    const point = pointFromEvent(event);
+    noteInkPointer(event);
+    if (event.pointerType === "pen" && drawingType.current === "touch") {
+      discardStroke();
+    }
+    if (!shouldAcceptInk(event)) return;
+    if (drawingId.current != null && drawingId.current !== event.pointerId) return;
+
+    const point = pointFromClient(event.clientX, event.clientY);
     if (!point) return;
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    drawingId.current = event.pointerId;
+    drawingType.current = event.pointerType;
+
     if (tool === "erase") {
       onStrokes((current) =>
         current.filter((stroke) => stroke.page !== pageIndex || !hitsStroke(stroke, point)),
@@ -305,25 +346,42 @@ const PaperPage = memo(function PaperPage({
       id: `${Date.now()}-${Math.random()}`,
       page: pageIndex,
       color,
-      width: 0.0046,
+      width: event.pointerType === "pen" ? 0.0038 : 0.0046,
       points: [point],
     };
   }
 
   function pointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
-    const point = pointFromEvent(event);
+    noteInkPointer(event);
+    if (event.pointerType === "pen" && event.buttons === 0) return;
+    if (drawingId.current !== event.pointerId) return;
+    if (!shouldAcceptInk(event) && event.pointerType === "touch") {
+      discardStroke();
+      return;
+    }
+
     const stroke = drawing.current;
     const canvas = inkRef.current;
-    if (!point || !stroke || !canvas) return;
-    stroke.points.push(point);
+    if (!stroke || !canvas) return;
+    const samples =
+      typeof event.nativeEvent.getCoalescedEvents === "function"
+        ? event.nativeEvent.getCoalescedEvents()
+        : [event.nativeEvent];
     const context = canvas.getContext("2d");
     if (!context) return;
-    drawStroke(context, { ...stroke, points: stroke.points.slice(-2) }, canvas.width);
+    for (const sample of samples) {
+      const point = pointFromClient(sample.clientX, sample.clientY);
+      if (!point) continue;
+      stroke.points.push(point);
+      drawStroke(context, { ...stroke, points: stroke.points.slice(-2) }, canvas.width);
+    }
   }
 
-  function pointerUp() {
+  function pointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
+    noteInkPointer(event);
+    if (drawingId.current != null && drawingId.current !== event.pointerId) return;
     const stroke = drawing.current;
-    drawing.current = null;
+    discardStroke();
     if (!stroke || stroke.points.length < 1) return;
     const last = stroke.points[stroke.points.length - 1] ?? stroke.points[0];
     const focus = strokeCentroid(stroke.points);
@@ -345,18 +403,25 @@ const PaperPage = memo(function PaperPage({
   }
 
   return (
-    <div className="relative mx-auto w-full overflow-hidden rounded-[2px] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+    <div
+      className="relative mx-auto w-full overflow-hidden rounded-[2px] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 1200px" }}
+    >
       <div ref={frameRef} />
       <canvas
         ref={inkRef}
         className={cn(
-          "absolute inset-0 h-full w-full touch-none",
+          "absolute inset-0 h-full w-full touch-none select-none",
           tool === "erase" ? "cursor-cell" : "cursor-crosshair",
         )}
+        style={{ touchAction: "none", WebkitUserSelect: "none" }}
         onPointerDown={pointerDown}
         onPointerMove={pointerMove}
         onPointerUp={pointerUp}
         onPointerCancel={pointerUp}
+        onLostPointerCapture={pointerUp}
+        onPointerEnter={(event) => noteInkPointer(event)}
+      />
       />
     </div>
   );

@@ -1,20 +1,26 @@
 "use client";
 
 import { ActiveClassControl } from "@/components/ClassIdentity";
-import { BrandMark, Button } from "@/components/ui";
+import { BrandMark, headerChipClass } from "@/components/ui";
 import { logoutTeacher } from "@/lib/auth";
 import { EXAM_SESSIONS, groupSessionsByYear, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-const NAV = [
+const TEACHER_NAV = [
   { id: "exam", href: "/exam", label: "[교실] 모의고사", short: "교실" },
   { id: "solo", href: "/solo", label: "[나혼자] 기출학습", short: "나혼자" },
   { id: "papers", href: "/papers", label: "시험문제 & 정답지", short: "문제" },
   { id: "admin", href: "/admin", label: "관리자 페이지", short: "관리자" },
+  { id: "vault", href: "/vault", label: "[보관소]", short: "보관소" },
+] as const;
+
+const STUDENT_NAV = [
+  { id: "solo", href: "/solo", label: "[나혼자] 기출학습", short: "나혼자" },
+  { id: "papers", href: "/papers", label: "시험문제 & 정답지", short: "문제" },
   { id: "vault", href: "/vault", label: "[보관소]", short: "보관소" },
 ] as const;
 
@@ -49,6 +55,8 @@ export function TeacherShell({
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
+  const student = profile.role === "student";
+  const NAV = student ? STUDENT_NAV : TEACHER_NAV;
   const section = currentSection(pathname);
   const sessionId = searchParams.get("session") || sessionFromPath(pathname);
   const grouped = useMemo(() => groupSessionsByYear(), []);
@@ -80,13 +88,14 @@ export function TeacherShell({
 
   return (
     <div className={cn("min-h-dvh bg-[#141414] text-white", solo && "flex h-dvh flex-col overflow-hidden")}>
-      <div className="sticky top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent px-[4%] py-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:hidden">
+      <div className="sticky top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent px-[4%] py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
         <BrandMark compact />
         <button
           type="button"
-          className="min-h-11 rounded-[4px] bg-[rgba(109,109,110,0.7)] px-4 text-sm font-bold"
+          className={headerChipClass(open)}
           onClick={() => setOpen((value) => !value)}
         >
+          <PanelIcon open={open} />
           회차
         </button>
       </div>
@@ -94,121 +103,101 @@ export function TeacherShell({
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/85 md:hidden"
+          className="fixed inset-0 z-30 bg-black/85 lg:hidden"
           aria-label="닫기"
           onClick={() => setOpen(false)}
         />
       ) : null}
 
-      <aside
+      <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[min(280px,86vw)] overflow-y-auto border-r border-[#1f1f1f] bg-black px-2 py-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] transition-transform duration-[250ms] md:w-[240px] lg:w-[248px]",
+          "fixed inset-y-0 left-0 z-40 flex transition-transform duration-[250ms]",
           open ? "translate-x-0" : "-translate-x-full",
-          desktopOpen ? "md:translate-x-0" : "md:-translate-x-full",
+          desktopOpen ? "lg:translate-x-0" : "lg:-translate-x-full",
         )}
       >
-        <div className="mb-5 flex h-10 items-center justify-between gap-2 px-2">
-          <BrandMark compact />
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              setDesktopSidebar(false);
-            }}
-            className="hidden h-8 shrink-0 items-center rounded-[4px] bg-white/10 px-2.5 text-[11px] font-bold text-white md:inline-flex"
-          >
-            접기
-          </button>
-        </div>
-        <div className="mb-4 rounded-[4px] bg-[#1f1f1f] px-3 py-3">
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-[#808080] uppercase">
-            프로필
-          </p>
-          <p className="mt-1 truncate text-sm font-bold text-white">{profile.full_name}</p>
-        </div>
-        {Object.entries(grouped).map(([year, sessions], index) => (
-          <div key={year} className="mb-6">
-            {index > 0 ? (
-              <div className="mb-4 px-1">
-                <div className="h-[2px] bg-[#c4a574]" />
-                <div className="my-2.5 flex items-center gap-3">
-                  <p className="text-[13px] font-bold tracking-[0.36em] text-[#c4a574]">{year}</p>
-                  <span className="h-[3px] flex-1 bg-gradient-to-r from-[#c4a574] via-[#e50914]/70 to-transparent" />
-                </div>
-                <div className="h-px bg-white/20" />
-              </div>
-            ) : (
-              <div className="mb-2 flex items-end justify-between px-2">
-                <p className="text-[11px] font-semibold tracking-[0.28em] text-[#9a9a9a]">{year}</p>
-                <span className="mb-1 ml-3 h-px flex-1 bg-gradient-to-r from-[#3a3a3a] to-transparent" />
-              </div>
-            )}
-            <div className="space-y-1">
-              {sessions.map((session) => (
-                <SessionLink
-                  key={session.id}
-                  session={session}
-                  active={session.id === sessionId}
-                  href={hrefFor(section, session.id)}
-                  onClick={() => setOpen(false)}
-                />
-              ))}
-            </div>
+        <aside className="w-[min(252px,78vw)] overflow-y-auto bg-black px-2 py-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] md:w-[220px] lg:w-[228px]">
+          <div className="mb-5 flex h-10 items-center px-2">
+            <BrandMark compact />
           </div>
-        ))}
-      </aside>
-
-      {desktopOpen ? null : (
-        <button
-          type="button"
-          onClick={() => setDesktopSidebar(true)}
-          className="fixed top-1/2 left-0 z-40 hidden -translate-y-1/2 rounded-r-[4px] border border-l-0 border-white/10 bg-black/90 px-2 py-8 text-[11px] font-bold tracking-[0.18em] text-white md:block"
-        >
-          회차
-        </button>
-      )}
+          <div className="mb-4 rounded-[4px] bg-[#1f1f1f] px-3 py-3">
+            <p className="text-[11px] font-semibold tracking-[0.16em] text-[#808080] uppercase">
+              {student ? "학생" : "교사"}
+            </p>
+            <p className="mt-1 truncate text-sm font-bold text-white">{profile.full_name}</p>
+          </div>
+          {Object.entries(grouped).map(([year, sessions], index) => (
+            <div key={year} className="mb-6">
+              {index > 0 ? (
+                <div className="mb-4 px-1">
+                  <div className="h-[2px] bg-[#c4a574]" />
+                  <div className="my-2.5 flex items-center gap-3">
+                    <p className="text-[13px] font-bold tracking-[0.36em] text-[#c4a574]">{year}</p>
+                    <span className="h-[3px] flex-1 bg-gradient-to-r from-[#c4a574] via-[#e50914]/70 to-transparent" />
+                  </div>
+                  <div className="h-px bg-white/20" />
+                </div>
+              ) : (
+                <div className="mb-2 flex items-end justify-between px-2">
+                  <p className="text-[11px] font-semibold tracking-[0.28em] text-[#9a9a9a]">{year}</p>
+                  <span className="mb-1 ml-3 h-px flex-1 bg-gradient-to-r from-[#3a3a3a] to-transparent" />
+                </div>
+              )}
+              <div className="space-y-1">
+                {sessions.map((session) => (
+                  <SessionLink
+                    key={session.id}
+                    session={session}
+                    active={session.id === sessionId}
+                    href={hrefFor(section, session.id)}
+                    onClick={() => setOpen(false)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </aside>
+      </div>
 
       <div
         className={cn(
           "transition-[padding] duration-[250ms]",
-          desktopOpen && "md:pl-[240px] lg:pl-[248px]",
+          desktopOpen && "lg:pl-[228px] xl:pl-[236px]",
           solo && "flex min-h-0 flex-1 flex-col overflow-hidden",
         )}
       >
-        <header className="sticky top-0 z-20 shrink-0 bg-gradient-to-b from-black/88 to-transparent px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-[4%] sm:py-3">
-          <div className="flex items-center gap-2">
+        <header className="sticky top-0 z-20 shrink-0 bg-gradient-to-b from-black/88 to-transparent px-3 py-2 pt-2 sm:px-[4%] sm:py-3 lg:px-3 lg:pt-[max(0.5rem,env(safe-area-inset-top))] xl:pr-[4%]">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setDesktopSidebar(!desktopOpen)}
-              className="hidden h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white md:inline-flex md:items-center"
+              className={cn(headerChipClass(), "hidden lg:inline-flex")}
             >
+              <PanelIcon open={desktopOpen} />
               {desktopOpen ? "회차 접기" : "회차"}
             </button>
-            <ActiveClassControl />
-            <nav className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:text-[13px]">
+            {student ? null : <ActiveClassControl />}
+            <nav className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
               {NAV.map((item) => {
                 const active = section === item.id;
                 return (
                   <Link
                     key={item.id}
                     href={hrefFor(item.id, sessionId)}
-                    className={cn(
-                      "shrink-0 rounded-[4px] px-2.5 py-2 transition duration-100 sm:px-4 sm:py-2.5",
-                      active
-                        ? "bg-white/10 font-bold text-white"
-                        : "text-[#b3b3b3] hover:text-[#e5e5e5]",
-                    )}
+                    className={headerChipClass(active)}
                   >
+                    <NavIcon id={item.id} />
                     <span className="sm:hidden">{item.short}</span>
                     <span className="hidden sm:inline">{item.label}</span>
                   </Link>
                 );
               })}
             </nav>
-            <div id="earth-header-timer" className="hidden min-w-0 shrink-0 md:flex md:items-center" />
-            <Button variant="ghost" className="h-10 shrink-0 px-3 sm:h-9 sm:px-5" onClick={logout}>
-              로그아웃
-            </Button>
+            <div id="earth-header-timer" className="hidden min-w-0 shrink-0 lg:flex lg:items-center" />
+            <button type="button" className={headerChipClass()} onClick={logout}>
+              <LogoutIcon />
+              <span className="hidden min-[420px]:inline">로그아웃</span>
+            </button>
           </div>
         </header>
         <div
@@ -225,6 +214,77 @@ export function TeacherShell({
 }
 
 const HIGHLIGHT_MONTHS = new Set([6, 9, 11]);
+
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 fill-none stroke-current" aria-hidden>
+      {children}
+    </svg>
+  );
+}
+
+function PanelIcon({ open }: { open: boolean }) {
+  return (
+    <Icon>
+      <rect x="4" y="5" width="16" height="14" rx="2" strokeWidth="1.7" />
+      <path d={open ? "M10 5v14" : "M14 5v14"} strokeWidth="1.7" />
+    </Icon>
+  );
+}
+
+function NavIcon({ id }: { id: string }) {
+  if (id === "exam") {
+    return (
+      <Icon>
+        <circle cx="12" cy="12" r="7.2" strokeWidth="1.7" />
+        <path d="M12 8.2v4.1l2.4 1.5" strokeWidth="1.7" strokeLinecap="round" />
+      </Icon>
+    );
+  }
+  if (id === "solo") {
+    return (
+      <Icon>
+        <circle cx="12" cy="9" r="3.1" strokeWidth="1.7" />
+        <path d="M6.4 18.2c.9-3 3-4.5 5.6-4.5s4.7 1.5 5.6 4.5" strokeWidth="1.7" strokeLinecap="round" />
+      </Icon>
+    );
+  }
+  if (id === "papers") {
+    return (
+      <Icon>
+        <path d="M8 4.8h6.2L18 8.6V19.2H8z" strokeWidth="1.7" strokeLinejoin="round" />
+        <path d="M14.1 4.8v3.9H18" strokeWidth="1.7" strokeLinejoin="round" />
+      </Icon>
+    );
+  }
+  if (id === "admin") {
+    return (
+      <Icon>
+        <circle cx="12" cy="12" r="2.4" strokeWidth="1.7" />
+        <path
+          d="M12 5.2v1.6M12 17.2v1.6M5.2 12h1.6M17.2 12h1.6M7.2 7.2l1.1 1.1M15.7 15.7l1.1 1.1M16.8 7.2l-1.1 1.1M8.3 15.7l-1.1 1.1"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </Icon>
+    );
+  }
+  return (
+    <Icon>
+      <path d="M6.2 8.2h11.6v10H6.2z" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M8.4 8.2V6.6h7.2v1.6" strokeWidth="1.7" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <Icon>
+      <path d="M10 7.2V6.2A1.4 1.4 0 0 1 11.4 4.8h6.2A1.4 1.4 0 0 1 19 6.2v11.6a1.4 1.4 0 0 1-1.4 1.4h-6.2A1.4 1.4 0 0 1 10 16.8v-1" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M4.8 12H14M11.4 9.2 14.2 12l-2.8 2.8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
 
 function SessionLink({
   session,

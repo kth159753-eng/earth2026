@@ -2,11 +2,13 @@ import { signupErrorMessage } from "@/lib/auth-errors";
 import { ensureTeacherProfile } from "@/lib/data";
 import { createClient } from "@/lib/supabase/client";
 import { supabasePublicKey, supabaseUrl } from "@/lib/supabase/env";
+import type { UserRole } from "@/lib/types";
 import { genericAuthError } from "@/lib/utils";
 
 type LoginResult = {
   ok: boolean;
   message?: string;
+  role?: "teacher" | "student";
 };
 
 type SignUpResult =
@@ -50,14 +52,17 @@ export async function signUpTeacher(input: {
   password: string;
   username: string;
   full_name: string;
+  role?: "teacher" | "student";
 }): Promise<SignUpResult> {
   try {
+    const role = input.role === "student" ? "student" : "teacher";
     const { response, json } = await authPost("/auth/v1/signup", {
       email: input.email,
       password: input.password,
       data: {
         username: input.username,
         full_name: input.full_name,
+        role,
       },
     });
 
@@ -92,6 +97,7 @@ export async function signUpTeacher(input: {
     await ensureTeacherProfile({
       username: input.username,
       full_name: input.full_name,
+      role,
     });
     return { ok: true };
   } catch (error) {
@@ -137,9 +143,26 @@ async function loginWithEdgeFunction(username: string, password: string) {
   return true;
 }
 
+async function finishLogin(expectedRole?: UserRole): Promise<LoginResult> {
+  const profile = await ensureTeacherProfile();
+  const role = profile?.role ?? "teacher";
+  if (expectedRole && role !== expectedRole) {
+    await logoutTeacher();
+    return {
+      ok: false,
+      message:
+        role === "student"
+          ? "학생 계정입니다. 학생을 선택하고 다시 들어와 주세요."
+          : "교사 계정입니다. 교사를 선택하고 다시 들어와 주세요.",
+    };
+  }
+  return { ok: true, role };
+}
+
 export async function loginWithUsername(
   username: string,
   password: string,
+  expectedRole?: UserRole,
 ): Promise<LoginResult> {
   const id = username.trim();
   if (!id || password.length < 8) {
@@ -148,13 +171,14 @@ export async function loginWithUsername(
 
   if (id.includes("@")) {
     const ok = await signInWithEmail(id, password);
-    return ok ? { ok: true } : { ok: false, message: genericAuthError() };
+    if (!ok) return { ok: false, message: genericAuthError() };
+    return finishLogin(expectedRole);
   }
 
   const normalized = id.toLowerCase();
   try {
     if (await loginWithEdgeFunction(normalized, password)) {
-      return { ok: true };
+      return finishLogin(expectedRole);
     }
   } catch {
     // Edge Function이 없어도 아래 RPC로 로그인합니다.
@@ -166,7 +190,7 @@ export async function loginWithUsername(
   });
   if (typeof email === "string" && email.includes("@")) {
     const ok = await signInWithEmail(email, password);
-    if (ok) return { ok: true };
+    if (ok) return finishLogin(expectedRole);
   }
 
   return { ok: false, message: genericAuthError() };

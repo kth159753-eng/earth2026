@@ -4,12 +4,14 @@ import { SetupNeeded } from "@/components/SetupNeeded";
 import { TeacherShell } from "@/components/TeacherShell";
 import { isSupabaseConfigured } from "@/lib/config";
 import { getProfile, peekTeacherProfile } from "@/lib/data";
+import { ProfileProvider } from "@/lib/profile-context";
 import type { Profile } from "@/lib/types";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 export function TeacherGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -45,6 +47,13 @@ export function TeacherGate({ children }: { children: React.ReactNode }) {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!profile || profile.role !== "student") return;
+    if (pathname.startsWith("/exam") || pathname.startsWith("/admin")) {
+      router.replace("/solo/");
+    }
+  }, [pathname, profile, router]);
+
   if (!isSupabaseConfigured()) {
     return <SetupNeeded />;
   }
@@ -53,9 +62,15 @@ export function TeacherGate({ children }: { children: React.ReactNode }) {
     return <div className="min-h-dvh bg-void" />;
   }
 
+  if (profile.role === "student" && (pathname.startsWith("/exam") || pathname.startsWith("/admin"))) {
+    return <div className="min-h-dvh bg-void" />;
+  }
+
   return (
     <Suspense fallback={<div className="min-h-dvh bg-void" />}>
-      <TeacherShell profile={profile}>{children}</TeacherShell>
+      <ProfileProvider profile={profile}>
+        <TeacherShell profile={profile}>{children}</TeacherShell>
+      </ProfileProvider>
     </Suspense>
   );
 }

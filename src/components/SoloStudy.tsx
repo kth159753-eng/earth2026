@@ -102,7 +102,7 @@ export function SoloStudy({
 
   useLayoutEffect(() => {
     setHeaderSlot(document.getElementById("earth-header-timer"));
-    const mq = window.matchMedia("(min-width: 768px)");
+    const mq = window.matchMedia("(min-width: 1024px)");
     const apply = () => setWide(mq.matches);
     apply();
     mq.addEventListener("change", apply);
@@ -190,7 +190,7 @@ export function SoloStudy({
         href: `${BASE_PATH}/pdf.worker.min.mjs`,
       }),
     ];
-    if (paperSrc) {
+    if (paperSrc && window.matchMedia("(min-width: 1024px)").matches) {
       nodes.push(
         Object.assign(document.createElement("link"), {
           rel: "prefetch",
@@ -469,47 +469,53 @@ export function SoloStudy({
     />
   );
   const timerInHeader = Boolean(headerSlot && wide && !guest);
+  const topBar = Boolean(onBack || !timerInHeader);
+  const omrButton = (
+    <button
+      type="button"
+      onClick={() => {
+        if (wide) setOmrDesktopPersist(!omrDesktop);
+        else setOmrOpen((value) => !value);
+      }}
+      className={cn(
+        "h-10 shrink-0 rounded-[4px] px-3 text-xs font-bold",
+        (wide ? omrDesktop : omrOpen)
+          ? "bg-[#e50914] text-white"
+          : "bg-white/10 text-white",
+      )}
+    >
+      {wide && omrDesktop ? "OMR 접기" : "OMR"}
+    </button>
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0f0f0f]">
       {timerInHeader && headerSlot ? createPortal(timer, headerSlot) : null}
-      <div className="z-10 shrink-0 border-b border-white/8 bg-[#141414]/95 px-2 py-1.5 backdrop-blur-sm sm:px-4">
-        <div className="flex items-center gap-2">
-          {onBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              className="h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white"
-            >
-              메뉴
-            </button>
-          ) : null}
-          <div className="hidden min-w-0 md:block md:w-[180px] xl:w-[220px]">
-            <p className="truncate text-sm font-bold">{session.label}</p>
-            <p className="text-[11px] text-[#808080]">
+      <div className="z-10 shrink-0 border-b border-white/8 bg-[#141414] px-2 py-1.5 sm:px-4">
+        {topBar ? (
+          <div className="flex items-center gap-2">
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white"
+              >
+                메뉴
+              </button>
+            ) : null}
+            <div className="min-w-0 flex-1">{timerInHeader ? null : timer}</div>
+            {omrButton}
+          </div>
+        ) : null}
+        <div className={cn("flex items-center gap-2 sm:gap-3", topBar && "mt-1.5")}>
+          <div className="min-w-0 max-w-[42vw] shrink-0 sm:max-w-[220px] xl:max-w-[260px]">
+            <p className="truncate text-sm font-bold leading-5">{session.label}</p>
+            <p className="truncate text-[11px] leading-4 text-[#808080]">
               {current + 1}번 · 선지만 칠해도 OMR에 입력됩니다
             </p>
           </div>
-          <div className="min-w-0 flex-1">
-            {timerInHeader ? null : timer}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (wide) setOmrDesktopPersist(!omrDesktop);
-              else setOmrOpen((value) => !value);
-            }}
-            className={cn(
-              "h-10 shrink-0 rounded-[4px] px-3 text-xs font-bold",
-              (wide ? omrDesktop : omrOpen)
-                ? "bg-[#e50914] text-white"
-                : "bg-white/10 text-white",
-            )}
-          >
-            {wide && omrDesktop ? "OMR 접기" : "OMR"}
-          </button>
-        </div>
-        <div className="-mx-1 mt-1.5 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="hidden h-6 w-px shrink-0 bg-white/15 sm:block" />
+          <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {COLORS.map((item) => (
             <button
               key={item.id}
@@ -599,6 +605,8 @@ export function SoloStudy({
               <ZoomIcon />
             </button>
           </div>
+          </div>
+          {topBar ? null : omrButton}
         </div>
       </div>
 
@@ -621,14 +629,14 @@ export function SoloStudy({
           </div>
         </div>
         {omrDesktop ? (
-          <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-[260px] md:block xl:inset-y-3 xl:right-3 xl:w-[300px]">
+          <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-[260px] lg:block xl:inset-y-3 xl:right-3 xl:w-[300px]">
             <div className="pointer-events-auto h-full min-h-0">{omrCard}</div>
           </div>
         ) : (
           <button
             type="button"
             onClick={() => setOmrDesktopPersist(true)}
-            className="absolute top-1/2 right-0 hidden -translate-y-1/2 rounded-l-[4px] border border-r-0 border-white/10 bg-[#c41e3a] px-2 py-8 text-[11px] font-black tracking-[0.18em] text-white md:block"
+            className="absolute top-1/2 right-0 hidden -translate-y-1/2 rounded-l-[4px] border border-r-0 border-white/10 bg-[#c41e3a] px-2 py-8 text-[11px] font-black tracking-[0.18em] text-white lg:block"
           >
             OMR
           </button>
@@ -636,7 +644,7 @@ export function SoloStudy({
       </div>
 
       {omrOpen ? (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/70"
@@ -677,7 +685,7 @@ function SoloTimerBar({
   return (
     <div
       className={cn(
-        "flex items-center gap-1 rounded-[4px] border px-1.5 py-1 sm:gap-1.5",
+        "flex max-w-full flex-wrap items-center gap-1 overflow-x-auto rounded-[4px] border px-1.5 py-1 [scrollbar-width:none] sm:gap-1.5",
         alarm ? "border-[#e50914] bg-[#e50914]/15" : "border-[#e50914]/70 bg-black/35",
       )}
     >

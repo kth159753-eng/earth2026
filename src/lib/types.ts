@@ -1,7 +1,10 @@
+export type UserRole = "teacher" | "student";
+
 export type Profile = {
   id: string;
   username: string;
   full_name: string;
+  role: UserRole;
 };
 
 export type ClassConfig = {
@@ -63,6 +66,24 @@ export type ClassSummary = {
   roster: number;
   average: number | null;
   graded: number;
+};
+
+export type ReportCell = {
+  score: number | null;
+  band: number | null;
+  submitted: boolean;
+};
+
+export type ReportStudent = {
+  grade: number;
+  classNumber: number;
+  studentNumber: number;
+  bySession: Record<string, ReportCell>;
+};
+
+export type ScoreReport = {
+  students: ReportStudent[];
+  sessionIds: string[];
 };
 
 export type SoloArchive = {
