@@ -36,10 +36,11 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark }: Prop
     let cancelled = false;
     const host = hostRef.current;
     if (!host) return;
+    const frameWidth = host.clientWidth || 800;
 
     async function render() {
       setError("");
-      const width = host.clientWidth || 800;
+      const width = frameWidth;
       try {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = `${BASE_PATH}/pdf.worker.min.mjs`;

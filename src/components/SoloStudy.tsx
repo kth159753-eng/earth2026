@@ -34,7 +34,7 @@ export function SoloStudy({ session }: { session: ExamSession }) {
   const files = useMemo(() => examViewerUrls(session), [session]);
   const paperSrc = files.paper && !files.paper.includes("drive.google.com") ? files.paper : null;
   const [tool, setTool] = useState<SoloTool>("pen");
-  const [color, setColor] = useState(COLORS[0].value);
+  const [color, setColor] = useState<(typeof COLORS)[number]["value"]>(COLORS[0].value);
   const [omrOpen, setOmrOpen] = useState(false);
   const [grade, setGrade] = useState(3);
   const [classNumber, setClassNumber] = useState(1);
