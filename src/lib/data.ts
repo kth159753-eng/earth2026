@@ -13,9 +13,9 @@ import { average } from "@/lib/utils";
 async function currentUser() {
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user ?? null;
 }
 
 function metaText(value: unknown) {
@@ -83,6 +83,15 @@ export async function ensureTeacherProfile(input?: {
     } catch {
       return null;
     }
+  }
+}
+
+export async function peekTeacherProfile(): Promise<Profile | null> {
+  try {
+    const user = await currentUser();
+    return user ? profileFromUser(user) : null;
+  } catch {
+    return null;
   }
 }
 

@@ -3,7 +3,7 @@
 import { SetupNeeded } from "@/components/SetupNeeded";
 import { TeacherShell } from "@/components/TeacherShell";
 import { isSupabaseConfigured } from "@/lib/config";
-import { getProfile } from "@/lib/data";
+import { getProfile, peekTeacherProfile } from "@/lib/data";
 import type { Profile } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -20,7 +20,7 @@ export function TeacherGate({ children }: { children: React.ReactNode }) {
     }
 
     let cancelled = false;
-    getProfile()
+    peekTeacherProfile()
       .then((next) => {
         if (cancelled) return;
         if (!next) {
@@ -29,6 +29,9 @@ export function TeacherGate({ children }: { children: React.ReactNode }) {
         }
         setProfile(next);
         setReady(true);
+        void getProfile().then((full) => {
+          if (!cancelled && full) setProfile(full);
+        });
       })
       .catch(() => {
         if (!cancelled) {

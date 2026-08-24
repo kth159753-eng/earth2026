@@ -22,6 +22,9 @@ const nextConfig: NextConfig = {
   output: "export",
   trailingSlash: true,
   images: { unoptimized: true },
+  experimental: {
+    optimizePackageImports: ["@supabase/supabase-js", "qrcode.react"],
+  },
   env: {
     NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: supabaseKey,

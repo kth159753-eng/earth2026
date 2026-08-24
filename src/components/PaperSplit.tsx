@@ -1,9 +1,10 @@
 "use client";
 
 import { saveExamAsset } from "@/lib/actions/teacher";
-import { driveExamUrls, type ExamSession } from "@/lib/exams";
+import { examViewerUrls, type ExamSession } from "@/lib/exams";
 import { createClient } from "@/lib/supabase/client";
 import { Notice } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -13,9 +14,24 @@ type Props = {
 };
 
 export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
-  const drive = useMemo(() => driveExamUrls(session), [session]);
+  const files = useMemo(() => examViewerUrls(session), [session]);
+
+  useEffect(() => {
+    const hrefs = [files.paper, files.solution].filter(Boolean) as string[];
+    const nodes = hrefs.map((href) => {
+      const link = document.createElement("link");
+      link.rel = "prefetch";
+      link.href = href;
+      document.head.appendChild(link);
+      return link;
+    });
+    return () => {
+      nodes.forEach((node) => node.remove());
+    };
+  }, [files.paper, files.solution]);
   const [paper, setPaper] = useState(paperUrl);
   const [solution, setSolution] = useState(solutionUrl);
+  const [pane, setPane] = useState<"paper" | "solution">("paper");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -25,23 +41,40 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
   }, [paperUrl, solutionUrl, session.id]);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5">
+    <div className="mx-auto w-full max-w-[1600px] px-3 py-4 sm:px-5 sm:py-5">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[40px] font-bold leading-none tracking-[-0.03em]">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-bold leading-tight tracking-[-0.03em] sm:text-[36px] lg:text-[40px]">
             {session.label}
           </h1>
-          <p className="mt-2 text-base text-[#d0d0d0]">{session.subjectName}</p>
+          <p className="mt-2 text-sm text-[#d0d0d0] sm:text-base">{session.subjectName}</p>
         </div>
       </div>
       {error ? <div className="mb-4"><Notice tone="warn">{error}</Notice></div> : null}
       {message ? <div className="mb-4"><Notice tone="ok">{message}</Notice></div> : null}
+      <div className="mb-3 grid grid-cols-2 gap-2 lg:hidden">
+        {(["paper", "solution"] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setPane(id)}
+            className={cn(
+              "h-11 rounded-[4px] text-sm font-bold",
+              pane === id ? "bg-[#e50914] text-white" : "bg-white/8 text-[#b3b3b3]",
+            )}
+          >
+            {id === "paper" ? "시험지" : "해설지"}
+          </button>
+        ))}
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
+        <div className={cn(pane === "paper" ? "block" : "hidden lg:block")}>
         <PaperPane
           title="시험지"
+          active={pane === "paper"}
           url={paper}
-          driveUrl={drive.paper}
-          openUrl={drive.paperOpen}
+          fileUrl={files.paper}
+          openUrl={files.paperOpen}
           onUploaded={async (path, url) => {
             setError("");
             try {
@@ -53,11 +86,14 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
             }
           }}
         />
+        </div>
+        <div className={cn(pane === "solution" ? "block" : "hidden lg:block")}>
         <PaperPane
           title="해설지"
+          active={pane === "solution"}
           url={solution}
-          driveUrl={drive.solution}
-          openUrl={drive.solutionOpen}
+          fileUrl={files.solution}
+          openUrl={files.solutionOpen}
           onUploaded={async (path, url) => {
             setError("");
             try {
@@ -69,6 +105,7 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
             }
           }}
         />
+        </div>
       </div>
     </div>
   );
@@ -78,21 +115,39 @@ function isImageSrc(src: string) {
   return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(src);
 }
 
+function useWideScreen() {
+  const [wide, setWide] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setWide(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
+
 function PaperPane({
   title,
+  active,
   url,
-  driveUrl,
+  fileUrl,
   openUrl,
   onUploaded,
 }: {
   title: string;
+  active: boolean;
   url: string | null;
-  driveUrl: string | null;
+  fileUrl: string | null;
   openUrl: string | null;
   onUploaded: (path: string, url: string) => Promise<void>;
 }) {
-  const src = url ?? driveUrl;
-  const href = url ?? openUrl ?? driveUrl;
+  const wide = useWideScreen();
+  const visible = active || wide;
+  const src = url ?? fileUrl;
+  const href = url ?? openUrl ?? fileUrl;
   const [pending, setPending] = useState(false);
 
   async function upload(file: File) {
@@ -150,22 +205,23 @@ function PaperPane({
           </label>
         </div>
       </div>
-      <div className="min-h-[68vh] bg-[#0a0d12]">
-        {src ? (
+      <div className="min-h-[62dvh] bg-[#0a0d12] lg:min-h-[68vh]">
+        {src && visible ? (
           isImageSrc(src) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt={title} className="mx-auto max-h-[78vh] w-full object-contain" />
+            <img src={src} alt={title} className="mx-auto max-h-[70dvh] w-full object-contain lg:max-h-[78vh]" />
           ) : (
             <iframe
               title={title}
               src={src}
-              className="h-[78vh] w-full border-0 bg-white"
-              allow="autoplay"
+              className="h-[70dvh] w-full border-0 bg-white lg:h-[78vh]"
               allowFullScreen
             />
           )
+        ) : src && !visible ? (
+          <div className="min-h-[62dvh] lg:min-h-[68vh]" />
         ) : (
-          <div className="grid min-h-[68vh] place-items-center px-6 text-center">
+          <div className="grid min-h-[62dvh] place-items-center px-6 text-center lg:min-h-[68vh]">
             <p className="text-sm text-stone-400">이 회차 파일이 아직 없습니다.</p>
           </div>
         )}

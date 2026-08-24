@@ -44,19 +44,15 @@ export function AdminConsole({
   const [tab, setTab] = useState<Tab>("omr");
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-3 py-5 sm:px-5">
-      <p className="flex items-center gap-1.5 text-[13px] font-bold tracking-[0.28em]">
-        <b className="text-[22px] font-black tracking-[-0.08em] text-[#e50914]">E</b>
-        ADMIN
-      </p>
-      <h1 className="mt-1 text-[40px] font-bold leading-none tracking-[-0.03em]">
+    <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-5">
+      <h1 className="text-[28px] font-bold leading-tight tracking-[-0.03em] sm:text-[36px] lg:text-[40px]">
         {sessionLabel}
       </h1>
       <p className="mt-1 text-sm text-stone-400">
         학급 설정, 제출 현황, 정답·배점, 비교를 한 화면에서 관리합니다.
       </p>
 
-      <div className="mt-5 grid grid-cols-2 gap-2 sm:flex">
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {(
           [
             ["omr", "OMR 대시보드"],
@@ -70,7 +66,7 @@ export function AdminConsole({
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "rounded-[4px] px-4 py-2 text-sm",
+              "min-h-11 rounded-[4px] px-3 py-2 text-sm sm:px-4",
               tab === id ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
             )}
           >
@@ -194,15 +190,15 @@ function ClassSettings({
       await saveClassConfigs(rows);
       setMessage("학급 설정을 저장했습니다.");
       await onReload?.();
-    } catch {
-      setError("저장에 실패했습니다.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "저장에 실패했습니다.");
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
+    <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4 sm:p-5">
       <SectionTitle title="학년 · 학급 · 학생 수" />
       <p className="mb-4 text-sm text-[#808080]">
         학급 수를 정한 뒤 반 번호를 바꿀 수 있습니다. 예: 5개 반을 3, 4, 5, 6, 7반으로.
@@ -311,7 +307,7 @@ function ClassSettings({
 
       {error ? <div className="mt-4"><Notice tone="warn">{error}</Notice></div> : null}
       {message ? <div className="mt-4"><Notice tone="ok">{message}</Notice></div> : null}
-      <Button className="mt-5" onClick={() => void save()} disabled={pending}>
+      <Button className="mt-5 w-full sm:w-auto" onClick={() => void save()} disabled={pending}>
         {pending ? "저장 중..." : "학급 설정 저장"}
       </Button>
     </section>
@@ -381,12 +377,64 @@ function AnswerEditor({
   }
 
   return (
-    <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-5">
+    <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4 sm:p-5">
       <SectionTitle
         title="정답과 배점"
         action={<p className="text-sm text-stone-400">총점 {total}점</p>}
       />
-      <div className="overflow-x-auto">
+      <div className="space-y-3 md:hidden">
+        {Array.from({ length: QUESTION_COUNT }, (_, question) => (
+          <div key={question} className="rounded-[4px] bg-black/25 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-bold">{question + 1}번</p>
+              <label className="flex items-center gap-2 text-xs text-stone-400">
+                배점
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={points[question]}
+                  onChange={(event) =>
+                    setPoints((current) => {
+                      const next = [...current];
+                      next[question] = Number(event.target.value);
+                      return next;
+                    })
+                  }
+                  className="h-10 w-16 rounded-lg border border-white/10 bg-black/30 text-center text-base"
+                />
+              </label>
+            </div>
+            <div className="flex gap-2">
+              {Array.from({ length: CHOICE_COUNT }, (_, choice) => {
+                const value = choice + 1;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setAnswers((current) => {
+                        const next = [...current];
+                        next[question] = value;
+                        return next;
+                      })
+                    }
+                    className={cn(
+                      "grid h-11 flex-1 place-items-center rounded-[4px] border text-sm",
+                      answers[question] === value
+                        ? "border-[#e50914] bg-[#e50914] text-white"
+                        : "border-white/15 text-stone-400",
+                    )}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="text-stone-500">
             <tr>
@@ -451,7 +499,7 @@ function AnswerEditor({
       </div>
       {error ? <div className="mt-4"><Notice tone="warn">{error}</Notice></div> : null}
       {message ? <div className="mt-4"><Notice tone="ok">{message}</Notice></div> : null}
-      <Button className="mt-5" onClick={() => void save()} disabled={pending}>
+      <Button className="mt-5 w-full sm:w-auto" onClick={() => void save()} disabled={pending}>
         {pending ? "저장 중..." : "정답 저장"}
       </Button>
     </section>
@@ -525,7 +573,7 @@ function OmrBoard({
             </button>
           ))}
         </div>
-        <Button onClick={() => void grade()} disabled={pending}>
+        <Button className="w-full sm:w-auto" onClick={() => void grade()} disabled={pending}>
           {pending ? "채점 중..." : "채점"}
         </Button>
       </div>
@@ -554,8 +602,8 @@ function OmrBoard({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-[4px] border border-white/8">
-        <table className="w-full min-w-[640px] text-sm">
+      <div className="-mx-3 overflow-x-auto rounded-[4px] border-y border-white/8 sm:mx-0 sm:border">
+        <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-white/3 text-stone-500">
             <tr>
               <th className="px-4 py-3 text-left font-medium">번호</th>

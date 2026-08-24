@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { ensureTeacherProfile } from "@/lib/data";
 import { QUESTION_COUNT, defaultPoints, emptyAnswers, getSession } from "@/lib/exams";
 import { createClient } from "@/lib/supabase/client";
 import { clamp } from "@/lib/utils";
@@ -6,18 +7,34 @@ import { clamp } from "@/lib/utils";
 async function requireTeacher() {
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user || !session.access_token) {
     throw new Error("로그인이 필요합니다.");
   }
   return { supabase, user };
+}
+
+function classSaveError(error: { message?: string; code?: string } | null) {
+  const text = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  if (text.includes("42501") || text.includes("permission denied")) {
+    return "데이터베이스 권한이 없습니다. Supabase SQL Editor에서 supabase/fix-signup.sql 을 실행해 주세요.";
+  }
+  if (text.includes("profiles") && (text.includes("foreign key") || text.includes("23503"))) {
+    return "교사 프로필이 없어 저장하지 못했습니다. 다시 로그인한 뒤 저장해 주세요.";
+  }
+  if (text.includes("row-level security") || text.includes("42501")) {
+    return "저장 권한이 없습니다. 다시 로그인한 뒤 시도해 주세요.";
+  }
+  return "학급 설정을 저장하지 못했습니다.";
 }
 
 export async function saveClassConfigs(
   rows: Array<{ grade: number; classNumber: number; studentCount: number }>,
 ) {
   const { supabase, user } = await requireTeacher();
+  const profile = await ensureTeacherProfile();
 
   const cleaned = rows
     .filter(
@@ -34,15 +51,33 @@ export async function saveClassConfigs(
       student_count: clamp(row.studentCount, 1, 40),
     }));
 
+  const { error: rpcError } = await supabase.rpc("save_class_configs", {
+    p_rows: cleaned.map((row) => ({
+      grade: row.grade,
+      class_number: row.class_number,
+      student_count: row.student_count,
+    })),
+  });
+  if (!rpcError) return { ok: true };
+
+  await supabase.from("profiles").upsert(
+    {
+      id: user.id,
+      username: profile?.username || `user_${user.id.replace(/-/g, "").slice(0, 8)}`,
+      full_name: profile?.full_name || "교사",
+    },
+    { onConflict: "id" },
+  );
+
   const { error: deleteError } = await supabase
     .from("class_configs")
     .delete()
     .eq("teacher_id", user.id);
-  if (deleteError) throw new Error("학급 설정을 저장하지 못했습니다.");
+  if (deleteError) throw new Error(classSaveError(rpcError ?? deleteError));
 
   if (cleaned.length > 0) {
     const { error } = await supabase.from("class_configs").insert(cleaned);
-    if (error) throw new Error("학급 설정을 저장하지 못했습니다.");
+    if (error) throw new Error(classSaveError(error));
   }
 
   return { ok: true };

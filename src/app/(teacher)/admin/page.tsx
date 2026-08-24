@@ -6,7 +6,6 @@ import {
   fallbackAnswerKey,
   getAnswerKey,
   getClassConfigs,
-  getProfile,
   getSubmissionsForSession,
   summarizeClass,
 } from "@/lib/data";
@@ -35,14 +34,12 @@ function AdminInner() {
   const [ready, setReady] = useState(false);
 
   const load = useCallback(async () => {
-    const profile = await getProfile();
-    if (!profile) return;
     const [configs, key, { submissions }] = await Promise.all([
       getClassConfigs(),
       getAnswerKey(session.id),
       getSubmissionsForSession(session.id),
     ]);
-    const answerKey = key ?? fallbackAnswerKey(session.id, profile.id);
+    const answerKey = key ?? fallbackAnswerKey(session.id, "");
     setClassConfigs(configs);
     setAnswers(answerKey.answers);
     setPoints(answerKey.points);

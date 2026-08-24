@@ -24,19 +24,19 @@ function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-[4%] py-10">
+    <main className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-[4%] py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:py-10">
       <div className="starfield" />
       <div className="vignette" />
       <div className="relative w-full max-w-[440px]">
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <BrandMark />
         </div>
-        <section className="rounded-[4px] bg-[#1f1f1f] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.7)] sm:p-8">
+        <section className="rounded-[4px] bg-[#1f1f1f] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.7)] sm:p-8">
           <p className="flex items-center gap-1.5 text-[13px] font-bold tracking-[0.28em]">
             <b className="text-[22px] font-black tracking-[-0.08em] text-[#e50914]">E</b>
             시험
           </p>
-          <h1 className="mt-2 text-[40px] font-bold leading-[0.95] tracking-[-0.03em] text-white">
+          <h1 className="mt-2 text-[28px] font-bold leading-[0.95] tracking-[-0.03em] text-white sm:text-[36px] lg:text-[40px]">
             {title}
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#b3b3b3]">{subtitle}</p>

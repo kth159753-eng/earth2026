@@ -29,7 +29,7 @@ export function TextField({
     <input
       {...props}
       className={cn(
-        "h-10 w-full rounded-[4px] border border-[#555] bg-[rgba(22,22,22,0.66)] px-3.5 text-sm text-white outline-none transition duration-100",
+        "h-12 w-full rounded-[4px] border border-[#555] bg-[rgba(22,22,22,0.66)] px-3.5 text-base text-white outline-none transition duration-100 sm:h-10 sm:text-sm",
         "placeholder:text-[#555] focus:border-white",
         className,
       )}
@@ -57,7 +57,7 @@ export function Button({
     <button
       {...props}
       className={cn(
-        "inline-flex h-10 items-center justify-center gap-1.5 rounded-[4px] px-6 text-sm font-bold transition duration-100 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[4px] px-5 text-sm font-bold transition duration-100 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:min-h-10 sm:px-6",
         styles[variant],
         className,
       )}
@@ -104,7 +104,7 @@ export function SectionTitle({
             {kicker}
           </p>
         ) : null}
-        <h2 className="text-[22px] font-bold tracking-tight text-white">{title}</h2>
+        <h2 className="text-[20px] font-bold tracking-tight text-white sm:text-[22px]">{title}</h2>
       </div>
       {action}
     </div>

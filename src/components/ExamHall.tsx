@@ -10,6 +10,42 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+const SUNEUNG_2027 = new Date(2026, 10, 19);
+
+function suneungCountdown(today = new Date()) {
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const exam = new Date(
+    SUNEUNG_2027.getFullYear(),
+    SUNEUNG_2027.getMonth(),
+    SUNEUNG_2027.getDate(),
+  );
+  const days = Math.round((exam.getTime() - start.getTime()) / 86_400_000);
+  return days > 0 ? `D-${days}` : days === 0 ? "D-DAY" : `D+${Math.abs(days)}`;
+}
+
+function ClockFace({
+  display,
+  remaining,
+  alarm,
+}: {
+  display: { hours: string; minutes: string; seconds: string };
+  remaining: number;
+  alarm: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "clock-glow mx-auto font-black leading-none text-white",
+        remaining <= 60 && remaining > 0 && "text-[#e50914]",
+        alarm && "text-[#e50914]",
+      )}
+    >
+      {display.hours !== "00" ? `${display.hours}:` : null}
+      {display.minutes}:{display.seconds}
+    </div>
+  );
+}
+
 type Props = {
   session: ExamSession;
   classes: ClassConfig[];
@@ -79,7 +115,7 @@ export function ExamHall({ session, classes }: Props) {
       }
     };
     tick();
-    const id = window.setInterval(tick, 250);
+    const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, [running]);
 
@@ -151,65 +187,50 @@ export function ExamHall({ session, classes }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function ClockFace() {
-    return (
-      <div
-        className={cn(
-          "clock-glow mx-auto font-black leading-none text-white",
-          remaining <= 60 && remaining > 0 && "text-[#e50914]",
-          alarm && "text-[#e50914]",
-        )}
-      >
-        {display.hours !== "00" ? `${display.hours}:` : null}
-        {display.minutes}:{display.seconds}
-      </div>
-    );
-  }
-
   return (
     <div className="relative isolate min-h-[calc(100dvh-72px)] overflow-hidden bg-[#141414]">
       <div className="starfield" />
       <div className="vignette" />
 
-      <div className="relative mx-auto flex h-full w-full max-w-[1400px] flex-col gap-4 px-[3%] py-4 lg:py-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+      <div className="relative mx-auto flex h-full w-full max-w-[1400px] flex-col gap-4 px-[4%] py-4 sm:px-[3%] lg:py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-[22px] font-bold leading-tight text-white sm:text-[28px]">
               {session.label}
             </h1>
-            <p className="mt-1 text-base text-[#d0d0d0]">
+            <p className="mt-1 text-sm text-[#d0d0d0] sm:text-base">
               {session.subjectName} · 20문항 · {now || "--:--:--"}
             </p>
           </div>
           <button
             type="button"
             onClick={toggleImmersive}
-            className="h-12 rounded-[4px] bg-[#e50914] px-5 text-sm font-bold text-white hover:bg-[#c00710]"
+            className="h-12 w-full shrink-0 rounded-[4px] bg-[#e50914] px-5 text-sm font-bold text-white hover:bg-[#c00710] sm:w-auto"
           >
             몰입 모드
           </button>
         </div>
 
-        <div className="grid items-stretch gap-4 xl:grid-cols-[1fr_300px]">
+        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[1fr_300px]">
           <section
             className={cn(
-              "relative flex min-h-[58vh] flex-col justify-center overflow-hidden rounded-[4px] bg-black px-4 py-8 text-center sm:min-h-[64vh] sm:px-8",
+              "relative flex min-h-[52dvh] flex-col justify-center overflow-hidden rounded-[4px] bg-black px-3 py-6 text-center sm:min-h-[58vh] sm:px-8 sm:py-8",
               alarm && "alarm-flash",
             )}
           >
-            <p className="text-lg font-bold text-[#c8c8c8]">남은 시간</p>
-            <div className="mt-3" style={{ fontSize: "clamp(5.5rem, 16vw, 13rem)" }}>
-              <ClockFace />
+            <p className="text-base font-bold text-[#c8c8c8] sm:text-lg">남은 시간</p>
+            <div className="mt-3" style={{ fontSize: "clamp(3.25rem, 18vw, 13rem)" }}>
+              <ClockFace display={display} remaining={remaining} alarm={alarm} />
             </div>
-            <div className="nf-progress mx-auto mt-8 h-2 max-w-3xl">
+            <div className="nf-progress mx-auto mt-6 h-2 w-full max-w-3xl sm:mt-8">
               <span style={{ width: `${progress * 100}%` }} />
             </div>
-            <div className="mx-auto mt-8 grid w-full max-w-lg grid-cols-3 gap-3">
+            <div className="mx-auto mt-6 grid w-full max-w-lg grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
               <TimeField label="시" value={hours} max={3} onChange={setHours} />
               <TimeField label="분" value={minutes} max={59} onChange={setMinutes} />
               <TimeField label="초" value={seconds} max={59} onChange={setSeconds} />
             </div>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <HallButton onClick={applyDuration}>시간 적용</HallButton>
               <PlayPauseButton running={running} onClick={running ? pause : start} />
               <HallButton onClick={reset}>리셋</HallButton>
@@ -301,23 +322,29 @@ export function ExamHall({ session, classes }: Props) {
               <button
                 type="button"
                 onClick={toggleImmersive}
-                className="absolute right-6 top-6 z-10 h-12 rounded-[4px] border border-white/25 bg-white/10 px-5 text-base font-bold"
+                className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 h-12 rounded-[4px] border border-white/25 bg-white/10 px-4 text-sm font-bold sm:right-6 sm:px-5 sm:text-base"
               >
-                몰입 종료 · ESC
+                몰입 종료<span className="hidden sm:inline"> · ESC</span>
               </button>
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-                <p className="text-2xl font-bold text-[#c8c8c8]">{session.label}</p>
-                <p className="mt-2 text-lg text-[#808080]">남은 시간</p>
-                <div className="mt-4" style={{ fontSize: "clamp(8rem, 28vw, 20rem)" }}>
-                  <ClockFace />
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 sm:px-6">
+                <p className="text-[clamp(1.75rem,5vw,3.5rem)] font-black leading-none tracking-[-0.04em] text-[#e50914]">
+                  2027 대수능 {suneungCountdown()}
+                </p>
+                <p className="mt-3 rounded-[3px] bg-[#f6ff4d] px-3 py-1.5 text-[clamp(1rem,2.8vw,1.85rem)] font-black leading-none text-[#141414] sm:px-4 sm:py-2">
+                  2026년 11월 19일 목요일
+                </p>
+                <p className="mt-6 text-lg font-bold text-[#c8c8c8] sm:text-2xl">{session.label}</p>
+                <p className="mt-2 text-base text-[#808080] sm:text-lg">남은 시간</p>
+                <div className="mt-4" style={{ fontSize: "clamp(4rem, 22vw, 20rem)" }}>
+                  <ClockFace display={display} remaining={remaining} alarm={alarm} />
                 </div>
-                <div className="nf-progress mx-auto mt-10 h-2 w-full max-w-5xl">
+                <div className="nf-progress mx-auto mt-8 h-2 w-full max-w-5xl sm:mt-10">
                   <span style={{ width: `${progress * 100}%` }} />
                 </div>
                 {alarm ? (
-                  <p className="mt-8 text-3xl font-bold text-[#e50914]">시험 종료 · 답안을 제출하세요</p>
+                  <p className="mt-8 text-xl font-bold text-[#e50914] sm:text-3xl">시험 종료 · 답안을 제출하세요</p>
                 ) : (
-                  <div className="mt-12">
+                  <div className="mt-10 sm:mt-12">
                     <PlayPauseButton running={running} onClick={running ? pause : start} />
                   </div>
                 )}
@@ -350,7 +377,7 @@ function TimeField({
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-12 w-full rounded-[4px] border border-[#777] bg-[#1a1a1a] text-center text-xl font-bold text-white"
+        className="h-12 w-full rounded-[4px] border border-[#777] bg-[#1a1a1a] text-center text-lg font-bold text-white sm:text-xl"
       />
     </label>
   );
@@ -367,7 +394,7 @@ function HallButton({
     <button
       type="button"
       onClick={onClick}
-      className="h-14 min-w-[120px] rounded-[4px] bg-[#3d3d3d] px-6 text-base font-bold text-white hover:bg-[#525252]"
+      className="h-14 w-full min-w-[120px] rounded-[4px] bg-[#3d3d3d] px-6 text-base font-bold text-white hover:bg-[#525252] sm:w-auto"
     >
       {children}
     </button>
@@ -386,7 +413,7 @@ function PlayPauseButton({
       type="button"
       onClick={onClick}
       aria-label={running ? "일시정지" : "시작"}
-      className="inline-flex h-16 items-center gap-3 rounded-full bg-[#e50914] px-7 text-lg font-bold text-white hover:bg-[#c00710]"
+      className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#e50914] px-7 text-lg font-bold text-white hover:bg-[#c00710] sm:h-16 sm:w-auto"
     >
       {running ? (
         <svg viewBox="0 0 24 24" className="h-7 w-7 fill-current" aria-hidden>

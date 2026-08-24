@@ -80,13 +80,48 @@ export function emptyAnswers(): number[] {
   return Array.from({ length: QUESTION_COUNT }, () => 0);
 }
 
+const LOCAL_EXAM_IDS = new Set([
+  "2025-03-I",
+  "2025-05-I",
+  "2025-06-I",
+  "2025-06-II",
+  "2025-07-I",
+  "2025-07-II",
+  "2025-09-I",
+  "2025-09-II",
+  "2025-10-I",
+  "2025-10-II",
+  "2025-11-I",
+  "2025-11-II",
+  "2026-03-I",
+  "2026-05-I",
+  "2026-05-II",
+  "2026-06-I",
+  "2026-06-II",
+  "2026-07-I",
+  "2026-07-II",
+]);
+
 export function publicExamPaths(session: ExamSession) {
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
   const folder = session.id;
   return {
-    paper: `/exams/${folder}/paper.pdf`,
-    solution: `/exams/${folder}/solution.pdf`,
-    paperImage: `/exams/${folder}/paper.png`,
-    solutionImage: `/exams/${folder}/solution.png`,
+    paper: `${base}/exams/${folder}/paper.pdf`,
+    solution: `${base}/exams/${folder}/solution.pdf`,
+    paperImage: `${base}/exams/${folder}/paper.png`,
+    solutionImage: `${base}/exams/${folder}/solution.png`,
+  };
+}
+
+export function examViewerUrls(session: ExamSession) {
+  const local = publicExamPaths(session);
+  const drive = driveExamUrls(session);
+  const hasLocal = LOCAL_EXAM_IDS.has(session.id);
+  return {
+    paper: hasLocal ? local.paper : drive.paper,
+    solution: hasLocal ? local.solution : drive.solution,
+    paperOpen: hasLocal ? local.paper : drive.paperOpen,
+    solutionOpen: hasLocal ? local.solution : drive.solutionOpen,
   };
 }
 

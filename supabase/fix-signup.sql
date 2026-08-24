@@ -1,4 +1,12 @@
--- 회원가입/아이디 로그인 패치. SQL Editor에서 이 파일 전체를 실행하세요.
+-- 회원가입/아이디 로그인/학급 저장 패치. SQL Editor에서 이 파일 전체를 실행하세요.
+
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on table public.profiles to authenticated;
+grant select, insert, update, delete on table public.class_configs to authenticated;
+grant select, insert, update, delete on table public.answer_keys to authenticated;
+grant select, insert, update, delete on table public.exam_assets to authenticated;
+grant select, insert, update, delete on table public.omr_codes to authenticated;
+grant select, insert, update, delete on table public.submissions to authenticated;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -58,6 +66,47 @@ $$;
 
 revoke all on function public.teacher_login_email(text) from public;
 grant execute on function public.teacher_login_email(text) to anon, authenticated;
+
+create or replace function public.save_class_configs(p_rows jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception '로그인이 필요합니다.';
+  end if;
+
+  insert into public.profiles (id, username, full_name)
+  values (
+    v_uid,
+    'user_' || substr(replace(v_uid::text, '-', ''), 1, 8),
+    '교사'
+  )
+  on conflict (id) do nothing;
+
+  delete from public.class_configs where teacher_id = v_uid;
+
+  insert into public.class_configs (teacher_id, grade, class_number, student_count)
+  select
+    v_uid,
+    (elem->>'grade')::smallint,
+    (elem->>'class_number')::smallint,
+    (elem->>'student_count')::smallint
+  from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb)) as elem
+  where (elem->>'grade')::int between 1 and 3
+    and (elem->>'class_number')::int between 1 and 15
+    and (elem->>'student_count')::int between 1 and 40;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.save_class_configs(jsonb) from public;
+grant execute on function public.save_class_configs(jsonb) to authenticated;
 
 drop policy if exists profiles_insert_own on public.profiles;
 create policy profiles_insert_own on public.profiles

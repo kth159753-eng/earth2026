@@ -4,9 +4,10 @@ import "./globals.css";
 
 const sans = Noto_Sans_KR({
   subsets: ["latin"],
-  weight: ["400", "500", "700", "900"],
+  weight: ["400", "700", "900"],
   variable: "--font-sans",
   display: "swap",
+  preload: true,
 });
 
 export const metadata: Metadata = {
@@ -17,12 +18,17 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#141414",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className={`${sans.variable} h-full antialiased`}>
+      <head>
+        <link rel="preconnect" href="https://cvfivbtvchypbeciulef.supabase.co" />
+        <link rel="dns-prefetch" href="https://cvfivbtvchypbeciulef.supabase.co" />
+      </head>
       <body className={`${sans.className} min-h-full bg-void text-white`}>{children}</body>
     </html>
   );

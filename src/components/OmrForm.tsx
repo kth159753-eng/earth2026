@@ -58,9 +58,9 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
   }
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-6">
+    <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <p className="text-[11px] tracking-[0.28em] text-[#e50914]">EARTH 2026 OMR</p>
-      <h1 className="mt-2 text-[40px] font-bold leading-none tracking-[-0.03em]">
+      <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.03em] sm:text-[36px] lg:text-[40px]">
         {session?.label ?? "모의고사"}
       </h1>
       <p className="mt-1 text-sm text-stone-400">
@@ -76,7 +76,7 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
               setStudentNumber(Number(event.target.value));
               setDone(false);
             }}
-            className="h-12 w-full rounded-[4px] border border-white/10 bg-black/40 px-3"
+            className="h-12 w-full rounded-[4px] border border-white/10 bg-black/40 px-3 text-base"
           >
             {roster.map((number) => (
               <option key={number} value={number}>
@@ -90,12 +90,12 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
           {Array.from({ length: QUESTION_COUNT }, (_, question) => (
             <div
               key={question}
-              className="grid grid-cols-[52px_1fr] items-center border-b border-white/8 last:border-b-0"
+              className="grid grid-cols-[44px_1fr] items-center border-b border-white/8 last:border-b-0 sm:grid-cols-[52px_1fr]"
             >
               <div className="bg-white/5 py-3 text-center text-sm font-semibold text-[#e50914]">
                 {question + 1}
               </div>
-              <div className="flex justify-around px-2 py-2">
+              <div className="flex justify-around gap-1 px-1.5 py-2 sm:px-2">
                 {Array.from({ length: CHOICE_COUNT }, (_, choice) => {
                   const value = choice + 1;
                   const selected = answers[question] === value;
@@ -105,7 +105,7 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
                       type="button"
                       onClick={() => setAnswer(question, value)}
                       className={cn(
-                        "grid h-11 w-11 place-items-center rounded-full border text-sm",
+                        "grid h-11 w-11 min-w-11 flex-1 place-items-center rounded-full border text-sm sm:max-w-12",
                         selected
                           ? "border-[#e50914] bg-[#e50914] text-white"
                           : "border-stone-500 text-stone-300",
