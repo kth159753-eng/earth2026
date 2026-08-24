@@ -43,10 +43,12 @@ function loadPdf(src: string) {
   return pending;
 }
 
+const MAX_BITMAP_WIDTH = 3200;
+
 function bitmapWidth(cssWidth: number) {
   const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
-  const cap = cssWidth < 720 ? 1.2 : 1.5;
-  return Math.max(280, Math.round(Math.min(cssWidth, 860) * Math.min(dpr, cap)));
+  const scale = Math.min(Math.max(dpr, 1), cssWidth < 520 ? 2 : 2.5);
+  return Math.min(MAX_BITMAP_WIDTH, Math.max(720, Math.round(cssWidth * scale)));
 }
 
 export type InkStroke = {
@@ -99,13 +101,13 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
     let timer = 0;
     const apply = (width: number) => {
       if (width <= 0) return;
-      if (Math.abs(width - widthRef.current) < 40 && widthRef.current) return;
+      if (Math.abs(width - widthRef.current) < 12 && widthRef.current) return;
       widthRef.current = width;
       setRenderWidth(width);
     };
     const update = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => apply(Math.floor(host.clientWidth)), 280);
+      timer = window.setTimeout(() => apply(Math.floor(host.clientWidth)), 160);
     };
     apply(Math.floor(host.clientWidth));
     const observer = new ResizeObserver(update);
@@ -114,7 +116,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
       window.clearTimeout(timer);
       observer.disconnect();
     };
-  }, [src]);
+  }, [src, zoom]);
 
   useEffect(() => {
     if (!renderWidth) return;
@@ -138,6 +140,8 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
           canvas.height = Math.floor(viewport.height);
           const context = canvas.getContext("2d", { alpha: false });
           if (!context) continue;
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = "high";
           await page.render({ canvasContext: context, viewport, intent: "display" }).promise;
           const content = await page.getTextContent();
           const items = content.items.flatMap((item) => {
@@ -242,6 +246,8 @@ const PaperPage = memo(function PaperPage({
     if (!frame) return;
     bitmap.className = "block h-auto w-full select-none";
     bitmap.style.width = "100%";
+    bitmap.style.height = "auto";
+    bitmap.style.imageRendering = "auto";
     frame.replaceChildren(bitmap);
   }, [bitmap]);
 
