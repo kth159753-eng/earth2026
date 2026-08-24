@@ -2,14 +2,19 @@
 
 import { ensureOmrCode } from "@/lib/actions/teacher";
 import { readActiveClass, writeActiveClass } from "@/lib/active-class";
-import type { ExamSession } from "@/lib/exams";
+import { siblingSession, type ExamSession } from "@/lib/exams";
 import type { ClassConfig } from "@/lib/types";
 import { omrUrl as buildOmrUrl } from "@/lib/config";
 import { classLabel, cn, formatClock, gradeLabel } from "@/lib/utils";
 import Link from "next/link";
-import { QRCodeSVG } from "qrcode.react";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+const QRCodeSVG = dynamic(
+  () => import("qrcode.react").then((mod) => ({ default: mod.QRCodeSVG })),
+  { ssr: false },
+);
 
 const SUNEUNG_2027 = new Date(2026, 10, 19);
 
@@ -36,7 +41,7 @@ function ClockFace({
   return (
     <div
       className={cn(
-        "clock-glow mx-auto font-black leading-none text-white",
+        "clock-glow mx-auto font-bold leading-none text-white",
         remaining <= 60 && remaining > 0 && "text-[#e50914]",
         alarm && "text-[#e50914]",
       )}
@@ -63,6 +68,8 @@ export function ExamHall({ session, classes }: Props) {
   const [classNumber, setClassNumber] = useState(classOptions[0]?.class_number ?? 1);
   const [classReady, setClassReady] = useState(false);
   const [code, setCode] = useState<string | null>(null);
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const pairSession = useMemo(() => siblingSession(session), [session]);
   const [immersive, setImmersive] = useState(false);
   const [now, setNow] = useState("");
   const [hours, setHours] = useState(0);
@@ -125,14 +132,30 @@ export function ExamHall({ session, classes }: Props) {
       .catch(() => {
         if (!cancelled) setCode(null);
       });
+    if (pairSession) {
+      ensureOmrCode(pairSession.id, grade, classNumber)
+        .then((result) => {
+          if (!cancelled) setPairCode(result.code);
+        })
+        .catch(() => {
+          if (!cancelled) setPairCode(null);
+        });
+    } else {
+      setPairCode(null);
+    }
     return () => {
       cancelled = true;
     };
-  }, [session.id, grade, classNumber, classes.length]);
+  }, [session.id, pairSession, grade, classNumber, classes.length]);
 
   useEffect(() => {
-    setOmrUrl(code ? buildOmrUrl(code) : "");
-  }, [code]);
+    setOmrUrl(code ? buildOmrUrl(code, pairCode) : "");
+  }, [code, pairCode]);
+
+  const codeI = session.subject === "I" ? code : pairCode;
+  const codeII = session.subject === "II" ? code : pairCode;
+  const urlI = codeI ? buildOmrUrl(codeI, codeII) : "";
+  const urlII = codeII ? buildOmrUrl(codeII, codeI) : "";
 
   useEffect(() => {
     const tick = () => {
@@ -224,11 +247,11 @@ export function ExamHall({ session, classes }: Props) {
   }, []);
 
   return (
-    <div className="relative isolate min-h-[calc(100dvh-72px)] overflow-hidden bg-[#141414]">
+    <div className="relative isolate min-h-[calc(100dvh-72px)] overflow-x-hidden overflow-y-auto bg-[#141414] pb-[env(safe-area-inset-bottom)]">
       <div className="starfield" />
       <div className="vignette" />
 
-      <div className="relative mx-auto flex h-full w-full max-w-[1400px] flex-col gap-4 px-[4%] py-4 sm:px-[3%] lg:py-5">
+      <div className="relative mx-auto flex h-full w-full max-w-[1400px] flex-col gap-3 px-3 py-3 sm:gap-4 sm:px-[3%] sm:py-4 lg:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-[22px] font-bold leading-tight text-white sm:text-[28px]">
@@ -342,6 +365,7 @@ export function ExamHall({ session, classes }: Props) {
                 </div>
                 <p className="mt-3 text-center text-sm text-white">
                   {gradeLabel(grade)} {classLabel(classNumber)}
+                  {pairSession ? " · 지I / 지II 선택" : ""}
                 </p>
                 <p className="mt-1 text-center font-mono text-[11px] text-[#555]">
                   {code ?? "--------"}
@@ -354,64 +378,104 @@ export function ExamHall({ session, classes }: Props) {
 
       {immersive && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[200] flex flex-col bg-black text-white">
+            <div className="fixed inset-0 z-[200] bg-[#070707] text-white">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(229,9,20,0.08),transparent_58%)]" />
               <button
                 type="button"
                 onClick={toggleImmersive}
-                className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 h-12 rounded-[4px] border border-white/25 bg-white/10 px-4 text-sm font-bold sm:right-6 sm:px-5 sm:text-base"
+                className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 h-10 rounded-[4px] border border-white/10 bg-white/5 px-3 text-xs font-bold text-[#b3b3b3] sm:right-6 sm:h-11 sm:px-4 sm:text-sm"
               >
                 몰입 종료<span className="hidden sm:inline"> · ESC</span>
               </button>
-              <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 sm:px-6">
-                <p className="text-[clamp(1.75rem,5vw,3.5rem)] font-black leading-none tracking-[-0.04em] text-[#e50914]">
-                  2027 대수능 {suneungCountdown()}
-                </p>
-                <p className="mt-3 text-[clamp(1rem,2.4vw,1.55rem)] font-semibold tracking-[0.06em] text-[#d7b4b4]">
-                  2026년 11월 19일 목요일
-                </p>
-                <p className="mt-6 text-lg font-bold text-[#c8c8c8] sm:text-2xl">{session.label}</p>
-                <p className="mt-2 text-base text-[#808080] sm:text-lg">남은 시간</p>
-                <div className="mt-2 sm:mt-3" style={{ fontSize: "clamp(5.25rem, 26vw, 22rem)" }}>
-                  <ClockFace display={display} remaining={remaining} alarm={alarm} />
-                </div>
-                <div className="nf-progress mx-auto mt-6 h-2 w-full max-w-5xl sm:mt-8">
-                  <span style={{ width: `${progress * 100}%` }} />
-                </div>
-                {alarm ? (
-                  <p className="mt-8 text-xl font-bold text-[#e50914] sm:text-3xl">시험 종료 · 답안을 제출하세요</p>
-                ) : (
-                  <div className="mt-8 sm:mt-10">
-                    <PlayPauseButton running={running} onClick={running ? pause : start} />
-                  </div>
-                )}
-                <div className="mt-8 w-[148px] sm:absolute sm:bottom-[max(1.5rem,env(safe-area-inset-bottom))] sm:left-[max(1.5rem,env(safe-area-inset-left))] sm:mt-0 sm:w-[168px]">
-                  <div className="rounded-[4px] bg-white p-2">
-                    {code ? (
-                      <QRCodeSVG
-                        value={omrUrl}
-                        size={168}
-                        level="M"
-                        className="mx-auto h-auto w-full"
-                        bgColor="#ffffff"
-                        fgColor="#141414"
-                      />
-                    ) : (
-                      <div className="grid aspect-square place-items-center text-center text-xs text-[#808080]">
-                        학급을 설정하면
-                        <br />
-                        QR이 보입니다
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-2 text-center text-sm text-[#d0d0d0]">
+              <div className="relative mx-auto flex h-full w-full max-w-[1680px] flex-col items-center justify-center px-4 py-6 sm:px-8">
+                <div className="text-center">
+                  <p className="text-[clamp(1.5rem,3.6vw,2.75rem)] font-bold leading-none tracking-[-0.04em] text-[#e50914]">
+                    2027 대수능 {suneungCountdown()}
+                  </p>
+                  <p className="mt-3 text-[clamp(0.95rem,1.8vw,1.25rem)] tracking-[0.08em] text-[#c4a0a0]">
+                    2026년 11월 19일 목요일
+                  </p>
+                  <p className="mt-4 text-[clamp(0.95rem,1.6vw,1.2rem)] font-semibold text-[#9a9a9a]">
+                    {session.label}
+                    <span className="mx-2 text-[#4a4a4a]">·</span>
                     {gradeLabel(grade)} {classLabel(classNumber)}
                   </p>
+                </div>
+
+                <div className="mt-8 grid w-full grid-cols-[minmax(92px,168px)_minmax(0,1fr)_minmax(92px,168px)] items-center gap-3 sm:mt-10 sm:grid-cols-[minmax(120px,196px)_minmax(0,1fr)_minmax(120px,196px)] sm:gap-8 lg:gap-12">
+                  <ImmersiveQr label="지I" url={urlI} />
+                  <div className="min-w-0 text-center">
+                    <p className="mb-2 text-[11px] tracking-[0.28em] text-[#6a6a6a] sm:text-xs">
+                      남은 시간
+                    </p>
+                    <div
+                      className="leading-none"
+                      style={{ fontSize: "clamp(3.25rem, 14vw, 11.5rem)" }}
+                    >
+                      <ClockFace display={display} remaining={remaining} alarm={alarm} />
+                    </div>
+                    <div className="mx-auto mt-6 h-[3px] w-[min(100%,36rem)] overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-[#e50914]"
+                        style={{ width: `${progress * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <ImmersiveQr label="지II" url={urlII} />
+                </div>
+
+                <div className="mt-8 sm:mt-10">
+                  {alarm ? (
+                    <p className="text-lg font-bold text-[#e50914] sm:text-2xl">
+                      시험 종료 · 답안을 제출하세요
+                    </p>
+                  ) : (
+                    <PlayPauseButton
+                      running={running}
+                      onClick={running ? pause : start}
+                      compact
+                    />
+                  )}
                 </div>
               </div>
             </div>,
             document.body,
           )
         : null}
+    </div>
+  );
+}
+
+function ImmersiveQr({
+  label,
+  url,
+}: {
+  label: string;
+  url: string;
+}) {
+  return (
+    <div className="mx-auto w-full">
+      <p className="mb-2 text-center text-[11px] font-semibold tracking-[0.22em] text-[#8a8a8a] sm:text-xs">
+        {label}
+      </p>
+      <div className="aspect-square rounded-[6px] bg-white p-[8%]">
+        {url ? (
+          <QRCodeSVG
+            value={url}
+            size={196}
+            level="M"
+            className="h-full w-full"
+            bgColor="#ffffff"
+            fgColor="#141414"
+          />
+        ) : (
+          <div className="grid h-full place-items-center text-center text-[10px] leading-5 text-[#8a8a8a] sm:text-xs">
+            이번 회차
+            <br />
+            없음
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -463,16 +527,23 @@ function HallButton({
 function PlayPauseButton({
   running,
   onClick,
+  compact = false,
 }: {
   running: boolean;
   onClick: () => void;
+  compact?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={running ? "일시정지" : "시작"}
-      className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#e50914] px-7 text-lg font-bold text-white hover:bg-[#c00710] sm:h-16 sm:w-auto"
+      className={cn(
+        "inline-flex items-center justify-center gap-3 bg-[#e50914] font-bold text-white hover:bg-[#c00710]",
+        compact
+          ? "h-12 rounded-[4px] px-6 text-sm sm:h-12 sm:w-auto"
+          : "h-14 w-full rounded-full px-7 text-lg sm:h-16 sm:w-auto",
+      )}
     >
       {running ? (
         <svg viewBox="0 0 24 24" className="h-7 w-7 fill-current" aria-hidden>

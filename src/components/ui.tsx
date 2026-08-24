@@ -114,7 +114,7 @@ export function SectionTitle({
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cn("flex items-center gap-3", compact && "gap-2")}>
-      <p className="text-[22px] font-black tracking-[-0.07em] text-[#e50914] sm:text-[26px]">
+      <p className="text-[22px] font-bold tracking-[-0.07em] text-[#e50914] sm:text-[26px]">
         EARTH
       </p>
       <div className={cn("leading-tight", compact && "hidden sm:block")}>

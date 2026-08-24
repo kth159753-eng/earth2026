@@ -64,3 +64,17 @@ export type ClassSummary = {
   average: number | null;
   graded: number;
 };
+
+export type SoloArchive = {
+  id: string;
+  teacher_id: string;
+  session_id: string;
+  grade: number;
+  class_number: number;
+  student_number: number;
+  answers: number[];
+  score: number;
+  total: number;
+  wrong_questions: number[];
+  graded_at: string;
+};

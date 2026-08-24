@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { ensureTeacherProfile } from "@/lib/data";
 import { QUESTION_COUNT, defaultPoints, emptyAnswers, getSession } from "@/lib/exams";
+import { isCompleteAnswers, officialAnswers } from "@/lib/official-keys";
 import { createClient } from "@/lib/supabase/client";
 import { clamp } from "@/lib/utils";
 
@@ -178,10 +179,13 @@ export async function gradeSession(sessionId: string) {
     .eq("session_id", sessionId)
     .maybeSingle();
 
-  const answers = (key?.answers as number[] | undefined) ?? emptyAnswers();
+  const saved = key?.answers as number[] | undefined;
+  const answers = isCompleteAnswers(saved)
+    ? saved
+    : officialAnswers(sessionId) ?? emptyAnswers();
   const points = (key?.points as number[] | undefined) ?? defaultPoints();
 
-  if (answers.some((value) => value < 1)) {
+  if (!isCompleteAnswers(answers)) {
     throw new Error("먼저 20문항 정답을 모두 입력해 주세요.");
   }
 

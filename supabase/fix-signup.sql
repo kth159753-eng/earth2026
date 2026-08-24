@@ -7,8 +7,30 @@ grant select, insert, update, delete on table public.answer_keys to authenticate
 grant select, insert, update, delete on table public.exam_assets to authenticated;
 grant select, insert, update, delete on table public.omr_codes to authenticated;
 grant select, insert, update, delete on table public.submissions to authenticated;
+grant select, insert, update, delete on table public.solo_archives to authenticated;
 
 alter table public.answer_keys add column if not exists grade_cuts smallint[];
+
+create table if not exists public.solo_archives (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid not null references public.profiles (id) on delete cascade,
+  session_id text not null,
+  grade smallint not null check (grade between 1 and 3),
+  class_number smallint not null check (class_number between 1 and 15),
+  student_number smallint not null check (student_number between 1 and 40),
+  answers smallint[] not null,
+  score numeric(5,1) not null,
+  total numeric(5,1) not null,
+  wrong_questions smallint[] not null default '{}',
+  graded_at timestamptz not null default now()
+);
+
+alter table public.solo_archives enable row level security;
+drop policy if exists solo_archives_own on public.solo_archives;
+create policy solo_archives_own on public.solo_archives
+  for all to authenticated
+  using (teacher_id = auth.uid())
+  with check (teacher_id = auth.uid());
 
 create or replace function public.handle_new_user()
 returns trigger

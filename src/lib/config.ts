@@ -9,12 +9,13 @@ export function siteUrl() {
   return "http://localhost:3000";
 }
 
-export function omrUrl(code: string) {
+export function omrUrl(code: string, pair?: string | null) {
   const origin =
     typeof window !== "undefined" ? window.location.origin : siteUrl();
   const base =
     typeof window !== "undefined" ? BASE_PATH : process.env.NEXT_PUBLIC_BASE_PATH || "";
-  return `${origin}${base}/omr/?c=${encodeURIComponent(code)}`;
+  const url = `${origin}${base}/omr/?c=${encodeURIComponent(code)}`;
+  return pair ? `${url}&p=${encodeURIComponent(pair)}` : url;
 }
 
 export function isSupabaseConfigured() {

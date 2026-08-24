@@ -205,23 +205,23 @@ function PaperPane({
           </label>
         </div>
       </div>
-      <div className="min-h-[62dvh] bg-[#0a0d12] lg:min-h-[68vh]">
+      <div className="min-h-[52dvh] bg-[#0a0d12] md:min-h-[62dvh] lg:min-h-[68vh]">
         {src && visible ? (
           isImageSrc(src) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt={title} className="mx-auto max-h-[70dvh] w-full object-contain lg:max-h-[78vh]" />
+            <img src={src} alt={title} className="mx-auto max-h-[58dvh] w-full object-contain md:max-h-[70dvh] lg:max-h-[78vh]" />
           ) : (
             <iframe
               title={title}
               src={src}
-              className="h-[70dvh] w-full border-0 bg-white lg:h-[78vh]"
+              className="h-[58dvh] w-full border-0 bg-white md:h-[70dvh] lg:h-[78vh]"
               allowFullScreen
             />
           )
         ) : src && !visible ? (
-          <div className="min-h-[62dvh] lg:min-h-[68vh]" />
+          <div className="min-h-[52dvh] md:min-h-[62dvh] lg:min-h-[68vh]" />
         ) : (
-          <div className="grid min-h-[62dvh] place-items-center px-6 text-center lg:min-h-[68vh]">
+          <div className="grid min-h-[52dvh] place-items-center px-6 text-center md:min-h-[62dvh] lg:min-h-[68vh]">
             <p className="text-sm text-stone-400">이 회차 파일이 아직 없습니다.</p>
           </div>
         )}

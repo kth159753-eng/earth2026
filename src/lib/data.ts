@@ -1,5 +1,11 @@
 import { DEFAULT_SESSION_ID, defaultPoints, emptyAnswers } from "@/lib/exams";
 import { defaultGradeCuts } from "@/lib/grades";
+import {
+  isCompleteAnswers,
+  isCompleteCuts,
+  officialAnswers,
+  officialCuts,
+} from "@/lib/official-keys";
 import { createClient } from "@/lib/supabase/client";
 import type {
   AnswerKey,
@@ -7,6 +13,7 @@ import type {
   ClassSummary,
   GradedRow,
   Profile,
+  SoloArchive,
   Submission,
 } from "@/lib/types";
 import { average } from "@/lib/utils";
@@ -113,9 +120,25 @@ export async function getClassConfigs(): Promise<ClassConfig[]> {
   return data ?? [];
 }
 
+function applyOfficialKey(sessionId: string, key: AnswerKey): AnswerKey {
+  return {
+    ...key,
+    answers: isCompleteAnswers(key.answers)
+      ? key.answers
+      : officialAnswers(sessionId) ?? key.answers,
+    grade_cuts: isCompleteCuts(key.grade_cuts)
+      ? key.grade_cuts
+      : officialCuts(sessionId) ?? key.grade_cuts,
+  };
+}
+
 export async function getAnswerKey(sessionId: string): Promise<AnswerKey | null> {
+  const hasOfficial =
+    Boolean(officialAnswers(sessionId)) || Boolean(officialCuts(sessionId));
   const user = await currentUser();
-  if (!user) return null;
+  if (!user) {
+    return hasOfficial ? applyOfficialKey(sessionId, fallbackAnswerKey(sessionId, "")) : null;
+  }
   const supabase = createClient();
   const full = await supabase
     .from("answer_keys")
@@ -123,25 +146,30 @@ export async function getAnswerKey(sessionId: string): Promise<AnswerKey | null>
     .eq("teacher_id", user.id)
     .eq("session_id", sessionId)
     .maybeSingle();
-  if (!full.error) return full.data;
-  const { data } = await supabase
-    .from("answer_keys")
-    .select("id, teacher_id, session_id, answers, points")
-    .eq("teacher_id", user.id)
-    .eq("session_id", sessionId)
-    .maybeSingle();
-  return data;
+  const saved = full.error
+    ? (
+        await supabase
+          .from("answer_keys")
+          .select("id, teacher_id, session_id, answers, points")
+          .eq("teacher_id", user.id)
+          .eq("session_id", sessionId)
+          .maybeSingle()
+      ).data
+    : full.data;
+  if (saved) return applyOfficialKey(sessionId, saved);
+  return hasOfficial ? applyOfficialKey(sessionId, fallbackAnswerKey(sessionId, user.id)) : null;
 }
 
 export function fallbackAnswerKey(sessionId: string, teacherId: string): AnswerKey {
   const points = defaultPoints();
+  const total = points.reduce((sum, value) => sum + value, 0);
   return {
     id: "",
     teacher_id: teacherId,
     session_id: sessionId,
-    answers: emptyAnswers(),
+    answers: officialAnswers(sessionId) ?? emptyAnswers(),
     points,
-    grade_cuts: defaultGradeCuts(points.reduce((sum, value) => sum + value, 0)),
+    grade_cuts: officialCuts(sessionId) ?? defaultGradeCuts(total),
   };
 }
 
@@ -247,3 +275,105 @@ export function summarizeClass(
 }
 
 export { DEFAULT_SESSION_ID };
+
+const VAULT_KEY = "earth-vault";
+
+function readLocalVault(): SoloArchive[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(VAULT_KEY) || "[]") as SoloArchive[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalVault(rows: SoloArchive[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(VAULT_KEY, JSON.stringify(rows.slice(0, 200)));
+}
+
+export async function saveSoloArchive(input: {
+  sessionId: string;
+  grade: number;
+  classNumber: number;
+  studentNumber: number;
+  answers: number[];
+  score: number;
+  total: number;
+  wrongQuestions: number[];
+}): Promise<SoloArchive> {
+  const user = await currentUser();
+  const row: SoloArchive = {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    teacher_id: user?.id ?? "",
+    session_id: input.sessionId,
+    grade: input.grade,
+    class_number: input.classNumber,
+    student_number: input.studentNumber,
+    answers: input.answers,
+    score: input.score,
+    total: input.total,
+    wrong_questions: input.wrongQuestions,
+    graded_at: new Date().toISOString(),
+  };
+
+  if (user) {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("solo_archives")
+      .insert({
+        teacher_id: user.id,
+        session_id: row.session_id,
+        grade: row.grade,
+        class_number: row.class_number,
+        student_number: row.student_number,
+        answers: row.answers,
+        score: row.score,
+        total: row.total,
+        wrong_questions: row.wrong_questions,
+        graded_at: row.graded_at,
+      })
+      .select(
+        "id, teacher_id, session_id, grade, class_number, student_number, answers, score, total, wrong_questions, graded_at",
+      )
+      .maybeSingle();
+    if (data) {
+      row.id = data.id;
+      row.teacher_id = data.teacher_id;
+    }
+  }
+
+  writeLocalVault([row, ...readLocalVault().filter((item) => item.id !== row.id)]);
+  return row;
+}
+
+export async function listSoloArchives(): Promise<SoloArchive[]> {
+  const local = readLocalVault();
+  const user = await currentUser();
+  if (!user) return local.sort((a, b) => b.graded_at.localeCompare(a.graded_at));
+
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("solo_archives")
+    .select(
+      "id, teacher_id, session_id, grade, class_number, student_number, answers, score, total, wrong_questions, graded_at",
+    )
+    .eq("teacher_id", user.id)
+    .order("graded_at", { ascending: false });
+
+  const remote = (data ?? []) as SoloArchive[];
+  const seen = new Set(remote.map((row) => row.id));
+  const merged = [...remote, ...local.filter((row) => !seen.has(row.id))];
+  writeLocalVault(merged);
+  return merged.sort((a, b) => b.graded_at.localeCompare(a.graded_at));
+}
+
+export async function deleteSoloArchive(id: string) {
+  writeLocalVault(readLocalVault().filter((row) => row.id !== id));
+  if (id.startsWith("local-")) return;
+  const user = await currentUser();
+  if (!user) return;
+  const supabase = createClient();
+  await supabase.from("solo_archives").delete().eq("id", id).eq("teacher_id", user.id);
+}

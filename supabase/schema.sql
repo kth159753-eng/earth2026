@@ -85,6 +85,24 @@ create table if not exists public.submissions (
 create index if not exists submissions_omr_idx
   on public.submissions (omr_code_id);
 
+create table if not exists public.solo_archives (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid not null references public.profiles (id) on delete cascade,
+  session_id text not null,
+  grade smallint not null check (grade between 1 and 3),
+  class_number smallint not null check (class_number between 1 and 15),
+  student_number smallint not null check (student_number between 1 and 40),
+  answers smallint[] not null,
+  score numeric(5,1) not null,
+  total numeric(5,1) not null,
+  wrong_questions smallint[] not null default '{}',
+  graded_at timestamptz not null default now(),
+  constraint solo_archive_answer_len check (cardinality(answers) = 20)
+);
+
+create index if not exists solo_archives_teacher_idx
+  on public.solo_archives (teacher_id, graded_at desc);
+
 -- ---------------------------------------------------------------------------
 -- 가입 시 프로필 자동 생성 (이메일은 profiles에 복제하지 않음)
 -- ---------------------------------------------------------------------------
@@ -310,6 +328,7 @@ grant select, insert, update, delete on table public.answer_keys to authenticate
 grant select, insert, update, delete on table public.exam_assets to authenticated;
 grant select, insert, update, delete on table public.omr_codes to authenticated;
 grant select, insert, update, delete on table public.submissions to authenticated;
+grant select, insert, update, delete on table public.solo_archives to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RLS · 교사는 본인 데이터만, 학생은 RPC만
@@ -321,6 +340,7 @@ alter table public.answer_keys enable row level security;
 alter table public.exam_assets enable row level security;
 alter table public.omr_codes enable row level security;
 alter table public.submissions enable row level security;
+alter table public.solo_archives enable row level security;
 
 drop policy if exists profiles_select_own on public.profiles;
 create policy profiles_select_own on public.profiles
@@ -352,6 +372,12 @@ create policy answer_keys_own on public.answer_keys
 
 drop policy if exists exam_assets_own on public.exam_assets;
 create policy exam_assets_own on public.exam_assets
+  for all to authenticated
+  using (teacher_id = auth.uid())
+  with check (teacher_id = auth.uid());
+
+drop policy if exists solo_archives_own on public.solo_archives;
+create policy solo_archives_own on public.solo_archives
   for all to authenticated
   using (teacher_id = auth.uid())
   with check (teacher_id = auth.uid());

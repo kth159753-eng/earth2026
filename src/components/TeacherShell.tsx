@@ -11,16 +11,18 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const NAV = [
-  { id: "exam", href: "/exam", label: "[교실] 모의고사" },
-  { id: "solo", href: "/solo", label: "[나혼자] 기출학습" },
-  { id: "papers", href: "/papers", label: "시험문제 & 정답지" },
-  { id: "admin", href: "/admin", label: "관리자 페이지" },
+  { id: "exam", href: "/exam", label: "[교실] 모의고사", short: "교실" },
+  { id: "solo", href: "/solo", label: "[나혼자] 기출학습", short: "나혼자" },
+  { id: "papers", href: "/papers", label: "시험문제 & 정답지", short: "문제" },
+  { id: "admin", href: "/admin", label: "관리자 페이지", short: "관리자" },
+  { id: "vault", href: "/vault", label: "[보관소]", short: "보관소" },
 ] as const;
 
 function currentSection(pathname: string) {
   if (pathname.startsWith("/solo")) return "solo";
   if (pathname.startsWith("/papers")) return "papers";
   if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/vault")) return "vault";
   return "exam";
 }
 
@@ -31,6 +33,7 @@ function sessionFromPath(pathname: string) {
 
 function hrefFor(section: string, sessionId: string) {
   if (section === "admin") return `/admin/?session=${sessionId}`;
+  if (section === "vault") return "/vault/";
   return `/${section}/${sessionId}/`;
 }
 
@@ -56,7 +59,7 @@ export function TeacherShell({
   }
 
   return (
-    <div className="min-h-dvh bg-[#141414] text-white">
+    <div className={cn("min-h-dvh bg-[#141414] text-white", solo && "flex h-dvh flex-col overflow-hidden")}>
       {!solo ? (
       <div className="sticky top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent px-[4%] py-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:hidden">
         <BrandMark compact />
@@ -95,12 +98,23 @@ export function TeacherShell({
           </p>
           <p className="mt-1 truncate text-sm font-bold text-white">{profile.full_name}</p>
         </div>
-        {Object.entries(grouped).map(([year, sessions]) => (
+        {Object.entries(grouped).map(([year, sessions], index) => (
           <div key={year} className="mb-6">
-            <div className="mb-2 flex items-end justify-between px-2">
-              <p className="text-[11px] font-semibold tracking-[0.28em] text-[#9a9a9a]">{year}</p>
-              <span className="mb-1 h-px flex-1 ml-3 bg-gradient-to-r from-[#3a3a3a] to-transparent" />
-            </div>
+            {index > 0 ? (
+              <div className="mb-4 px-1">
+                <div className="h-[2px] bg-[#c4a574]" />
+                <div className="my-2.5 flex items-center gap-3">
+                  <p className="text-[13px] font-bold tracking-[0.36em] text-[#c4a574]">{year}</p>
+                  <span className="h-[3px] flex-1 bg-gradient-to-r from-[#c4a574] via-[#e50914]/70 to-transparent" />
+                </div>
+                <div className="h-px bg-white/20" />
+              </div>
+            ) : (
+              <div className="mb-2 flex items-end justify-between px-2">
+                <p className="text-[11px] font-semibold tracking-[0.28em] text-[#9a9a9a]">{year}</p>
+                <span className="mb-1 ml-3 h-px flex-1 bg-gradient-to-r from-[#3a3a3a] to-transparent" />
+              </div>
+            )}
             <div className="space-y-1">
               {sessions.map((session) => (
                 <SessionLink
@@ -117,10 +131,10 @@ export function TeacherShell({
       </aside>
       ) : null}
 
-      <div className={cn(!solo && "md:pl-[240px] lg:pl-[248px]")}>
-        <header className="sticky top-0 z-20 bg-gradient-to-b from-black/88 to-transparent px-[4%] py-3 sm:py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <nav className="-mx-1 flex gap-1 overflow-x-auto pb-1 text-[13px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2">
+      <div className={cn(!solo && "md:pl-[240px] lg:pl-[248px]", solo && "flex min-h-0 flex-1 flex-col overflow-hidden")}>
+        <header className="sticky top-0 z-20 shrink-0 bg-gradient-to-b from-black/88 to-transparent px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-[4%] sm:py-3">
+          <div className="flex items-center gap-2">
+            <nav className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:text-[13px]">
               {NAV.map((item) => {
                 const active = section === item.id;
                 return (
@@ -128,39 +142,45 @@ export function TeacherShell({
                     key={item.id}
                     href={hrefFor(item.id, sessionId)}
                     className={cn(
-                      "shrink-0 rounded-[4px] px-3 py-2.5 transition duration-100 sm:px-4",
+                      "shrink-0 rounded-[4px] px-2.5 py-2 transition duration-100 sm:px-4 sm:py-2.5",
                       active
                         ? "bg-white/10 font-bold text-white"
                         : "text-[#b3b3b3] hover:text-[#e5e5e5]",
                     )}
                   >
-                    {item.label}
+                    <span className="sm:hidden">{item.short}</span>
+                    <span className="hidden sm:inline">{item.label}</span>
                   </Link>
                 );
               })}
               <ActiveClassBadge />
             </nav>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              {solo ? (
-                <select
-                  value={sessionId}
-                  onChange={(event) => router.push(hrefFor("solo", event.target.value))}
-                  className="h-11 min-w-0 rounded-[4px] border border-white/15 bg-black/40 px-3 text-sm sm:h-9 sm:min-w-[220px]"
-                >
-                  {EXAM_SESSIONS.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {session.label}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              <Button variant="ghost" className="h-11 w-full sm:h-9 sm:w-auto" onClick={logout}>
-                로그아웃
-              </Button>
-            </div>
+            <Button variant="ghost" className="h-10 shrink-0 px-3 sm:h-9 sm:px-5" onClick={logout}>
+              로그아웃
+            </Button>
           </div>
+          {solo ? (
+            <select
+              value={sessionId}
+              onChange={(event) => router.push(hrefFor("solo", event.target.value))}
+              className="mt-2 h-11 w-full rounded-[4px] border border-white/15 bg-black/40 px-3 text-base sm:h-9 sm:max-w-xs sm:text-sm md:max-w-sm"
+            >
+              {EXAM_SESSIONS.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </header>
-        <div className="min-h-[calc(100dvh-72px)] pb-[env(safe-area-inset-bottom)]">{children}</div>
+        <div
+          className={cn(
+            "flex flex-col pb-[env(safe-area-inset-bottom)]",
+            solo ? "min-h-0 flex-1 overflow-hidden" : "min-h-[calc(100dvh-72px)]",
+          )}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -175,14 +195,16 @@ function ActiveClassBadge() {
 
   return (
     <span
-      className="shrink-0 rounded-[4px] bg-white/10 px-3 py-2.5 text-[13px] font-bold text-white sm:px-4"
+      className="shrink-0 rounded-[4px] bg-white/10 px-2 py-2 text-[12px] font-bold text-white sm:px-4 sm:py-2.5 sm:text-[13px]"
       title="교실 모의고사에서 선택한 학급"
     >
       {active.running ? (
         <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[#e50914] align-middle" />
       ) : null}
       {gradeLabel(active.grade)} {classLabel(active.classNumber)}
-      {active.running ? <span className="ml-1.5 text-[11px] font-semibold text-[#e50914]">진행 중</span> : null}
+      {active.running ? (
+        <span className="ml-1.5 hidden text-[11px] font-semibold text-[#e50914] sm:inline">진행 중</span>
+      ) : null}
     </span>
   );
 }

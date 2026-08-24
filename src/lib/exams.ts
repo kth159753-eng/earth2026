@@ -54,6 +54,15 @@ export function getSession(id: string): ExamSession | undefined {
   return EXAM_SESSIONS.find((session) => session.id === id);
 }
 
+export function siblingSession(session: ExamSession) {
+  const other = session.subject === "I" ? "II" : "I";
+  return (
+    EXAM_SESSIONS.find(
+      (item) => item.year === session.year && item.month === session.month && item.subject === other,
+    ) ?? null
+  );
+}
+
 export function requireSession(id: string): ExamSession {
   const session = getSession(id);
   if (!session) {
@@ -83,6 +92,7 @@ export function emptyAnswers(): number[] {
 const LOCAL_EXAM_IDS = new Set([
   "2025-03-I",
   "2025-05-I",
+  "2025-05-II",
   "2025-06-I",
   "2025-06-II",
   "2025-07-I",
@@ -134,6 +144,8 @@ const DRIVE_FILE_LIST = [
   { id: "1O55NkyDlX53N5JD4GHscbTn8VIbglV3e", name: "2025_3월(답).pdf" },
   { id: "1RTH3VKHOR8txxkX4uD2FpmNxPjExMDgZ", name: "2025_5월.pdf" },
   { id: "1bb7SexzyqTBoT3fbv6o7In019nHLE93V", name: "2025_5월(답).pdf" },
+  { id: "17YIq-8HrwSJB9blzLr3xhHXVXrg-gGn8", name: "2025_5월 지2.pdf" },
+  { id: "11aRqFVzTi2i1kmA-KHQXfUyl7LnzrI7p", name: "2025_5월 지2(답).pdf" },
   { id: "1sHfOoU4jMKmjrDtEMJ_pEG2U3YAWNISQ", name: "2025_6월.pdf" },
   { id: "1RFZ0pUSHi1_gnXcat3IIXPpcQ8XojsAT", name: "2025_6월(답).pdf" },
   { id: "130JHSSXUbezxtWHM55VR7WCWeEFGeECG", name: "2025_6월 지2.pdf" },

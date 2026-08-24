@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   experimental: {
-    optimizePackageImports: ["@supabase/supabase-js", "qrcode.react"],
+    optimizePackageImports: ["@supabase/supabase-js", "qrcode.react", "pdfjs-dist"],
   },
   transpilePackages: ["pdfjs-dist"],
   env: {

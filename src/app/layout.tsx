@@ -4,7 +4,7 @@ import "./globals.css";
 
 const sans = Noto_Sans_KR({
   subsets: ["latin"],
-  weight: ["400", "700", "900"],
+  weight: ["400", "700"],
   variable: "--font-sans",
   display: "swap",
   preload: true,
