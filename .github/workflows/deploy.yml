@@ -44,12 +44,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
           NEXT_PUBLIC_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-        run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] && [ -z "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" ]; then
-            echo "GitHub Actions secret NEXT_PUBLIC_SUPABASE_ANON_KEY 가 필요합니다."
-            exit 1
-          fi
-          npm run build
+        run: npm run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -16,7 +16,7 @@ const supabaseUrl =
 const supabaseKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "";
+  "sb_publishable_9IBkfrtsi7tTaQtZ1G74iA_iHYBP9xq";
 
 const nextConfig: NextConfig = {
   output: "export",

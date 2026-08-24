@@ -144,11 +144,6 @@ export function SignupForm() {
       return;
     }
 
-    if (typeof window !== "undefined" && window.location.hostname.includes("github.io")) {
-      setError("지금 열린 주소는 예전 배포입니다. http://localhost:3000/signup 에서 가입해 주세요.");
-      return;
-    }
-
     setPending(true);
     try {
       const result = await signUpTeacher({

@@ -97,7 +97,7 @@ export async function signUpTeacher(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.toLowerCase().includes("failed to fetch")) {
-      return { ok: false, message: "연결에 실패했습니다. http://localhost:3000/signup 에서 다시 시도해 주세요." };
+      return { ok: false, message: "연결에 실패했습니다. 잠시 후 다시 시도해 주세요." };
     }
     return { ok: false, message: signupErrorMessage({ message }) };
   }
