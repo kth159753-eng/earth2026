@@ -107,15 +107,15 @@ export function TeacherShell({
           desktopOpen ? "md:translate-x-0" : "md:-translate-x-full",
         )}
       >
-        <div className="mb-5 flex items-start justify-between gap-2 px-2">
-          <BrandMark />
+        <div className="mb-5 flex h-10 items-center justify-between gap-2 px-2">
+          <BrandMark compact />
           <button
             type="button"
             onClick={() => {
               setOpen(false);
               setDesktopSidebar(false);
             }}
-            className="mt-1 hidden h-8 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white md:inline-flex md:items-center"
+            className="hidden h-8 shrink-0 items-center rounded-[4px] bg-white/10 px-2.5 text-[11px] font-bold text-white md:inline-flex"
           >
             접기
           </button>
@@ -184,6 +184,7 @@ export function TeacherShell({
             >
               {desktopOpen ? "회차 접기" : "회차"}
             </button>
+            <ActiveClassControl />
             <nav className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:text-[13px]">
               {NAV.map((item) => {
                 const active = section === item.id;
@@ -204,7 +205,6 @@ export function TeacherShell({
                 );
               })}
             </nav>
-            <ActiveClassControl />
             <div id="earth-header-timer" className="hidden min-w-0 shrink-0 md:flex md:items-center" />
             <Button variant="ghost" className="h-10 shrink-0 px-3 sm:h-9 sm:px-5" onClick={logout}>
               로그아웃

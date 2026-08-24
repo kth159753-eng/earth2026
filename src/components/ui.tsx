@@ -113,15 +113,19 @@ export function SectionTitle({
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={cn("flex items-center gap-3", compact && "gap-2")}>
-      <p className="text-[22px] font-bold tracking-[-0.07em] text-[#e50914] sm:text-[26px]">
+    <div className={cn("flex min-w-0 items-center", compact ? "gap-2" : "gap-3")}>
+      <p className="shrink-0 text-[22px] font-bold tracking-[-0.07em] text-[#e50914] sm:text-[26px]">
         EARTH
       </p>
-      <div className={cn("leading-tight", compact && "hidden sm:block")}>
-        <p className="text-[11px] font-semibold text-[#b3b3b3]">2026</p>
-        <p className="text-[11px] text-[#808080]">지구과학</p>
-        <p className="text-[11px] text-[#808080]">실전 모의고사</p>
-      </div>
+      {compact ? (
+        <p className="truncate text-[11px] font-semibold text-[#b3b3b3]">2026</p>
+      ) : (
+        <div className="leading-tight">
+          <p className="text-[11px] font-semibold text-[#b3b3b3]">2026</p>
+          <p className="text-[11px] text-[#808080]">지구과학</p>
+          <p className="text-[11px] text-[#808080]">실전 모의고사</p>
+        </div>
+      )}
     </div>
   );
 }

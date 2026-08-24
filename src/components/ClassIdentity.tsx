@@ -174,26 +174,26 @@ export function ActiveClassControl() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-10 shrink-0 items-center gap-2 rounded-[4px] border border-white/15 bg-white/10 px-2.5 text-left sm:h-11 sm:px-3"
+        className="flex h-10 shrink-0 items-center gap-2 rounded-[4px] border border-[#ffd400]/45 bg-[#ffd400]/10 px-2.5 text-left sm:h-11 sm:px-3"
         title="학급 바꾸기"
       >
         {active?.running ? (
-          <span className="h-2 w-2 shrink-0 rounded-full bg-[#e50914]" />
+          <span className="h-2 w-2 shrink-0 rounded-full bg-[#ffd400]" />
         ) : (
-          <span className="h-2 w-2 shrink-0 rounded-full bg-[#6a6a6a]" />
+          <span className="h-2 w-2 shrink-0 rounded-full bg-[#ffd400]/45" />
         )}
         <span className="leading-none">
-          <span className="block text-[9px] font-bold tracking-[0.16em] text-[#9a9a9a]">학급</span>
-          <span className="block text-[13px] font-black text-white sm:text-sm">
+          <span className="block text-[9px] font-bold tracking-[0.16em] text-[#ffe066]">학급</span>
+          <span className="block text-[13px] font-black text-[#ffd400] sm:text-sm">
             {active
               ? `${gradeLabel(active.grade)} ${classLabel(active.classNumber)}`
               : "학급 선택"}
           </span>
         </span>
         {active?.running ? (
-          <span className="hidden text-[10px] font-bold text-[#e50914] sm:inline">진행 중</span>
+          <span className="hidden text-[10px] font-bold text-[#ffd400] sm:inline">진행 중</span>
         ) : null}
-        <span className="text-[10px] text-[#808080]">▾</span>
+        <span className="text-[10px] text-[#ffe066]">▾</span>
       </button>
       {open ? (
         <div className="fixed inset-0 z-[80]">

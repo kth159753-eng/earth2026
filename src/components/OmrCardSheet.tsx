@@ -35,21 +35,21 @@ export function OmrCardSheet({
     <aside className="flex h-full max-h-full flex-col overflow-hidden bg-[#2a1616] p-[3px] shadow-[0_12px_32px_rgba(0,0,0,0.55)]">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-[3px] border-[#c41e3a] bg-[#f3ead6] text-[#141414]">
         <div className="shrink-0 border-b-[3px] border-[#c41e3a] bg-[#c41e3a] px-3 py-2 text-white">
-          <div className="flex items-end justify-between gap-2">
-            <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
               <p className="text-[9px] font-bold tracking-[0.28em]">컴퓨터용 수험생 답안지</p>
-              <p className="mt-0.5 text-sm font-black tracking-tight">{title ?? "OMR 카드"}</p>
+              <p className="mt-0.5 truncate text-sm font-black tracking-tight">{title ?? "OMR 카드"}</p>
             </div>
             {onCollapse ? (
               <button
                 type="button"
                 onClick={onCollapse}
-                className="h-8 rounded-[2px] bg-black/20 px-2 text-[11px] font-black text-white"
+                className="h-8 shrink-0 rounded-[2px] bg-black/20 px-2.5 text-[11px] font-black text-white"
               >
                 접기
               </button>
             ) : (
-              <p className="text-[10px] font-bold tracking-widest text-white/75">EARTH</p>
+              <p className="shrink-0 text-[10px] font-bold tracking-widest text-white/75">EARTH</p>
             )}
           </div>
           {subtitle ? <p className="mt-0.5 text-[11px] text-white/80">{subtitle}</p> : null}
