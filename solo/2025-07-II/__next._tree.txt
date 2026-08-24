@@ -1,0 +1,4 @@
+:HL["/earth2026/_next/static/chunks/2ceoc090oih0u.css","style"]
+:HL["/earth2026/_next/static/chunks/11zp5g9oijkll.css","style"]
+:HC["/",""]
+0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"(teacher)","param":null,"prefetchHints":4192,"slots":{"children":{"name":"solo","param":null,"prefetchHints":4192,"slots":{"children":{"name":"session","param":{"type":"d","key":"2025-07-II","siblings":[]},"prefetchHints":4192,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}}}}}}}},"staleTime":300,"buildId":"6IoWRo5po9vUY6ANrdXnX"}

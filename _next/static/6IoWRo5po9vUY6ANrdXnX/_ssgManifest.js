@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002Fexam\u002F[session]","\u002Fpapers\u002F[session]","\u002Fsolo\u002F[session]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()

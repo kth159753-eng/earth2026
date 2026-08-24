@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,26882,e=>{"use strict";var t=e.i(43476),i=e.i(83533),s=e.i(18566),u=e.i(71645);e.s(["default",0,function(){let e=(0,s.useRouter)();return(0,u.useEffect)(()=>{e.replace(`/exam/${i.DEFAULT_SESSION_ID}/`)},[e]),(0,t.jsx)("div",{className:"min-h-dvh bg-void"})}])}]);
