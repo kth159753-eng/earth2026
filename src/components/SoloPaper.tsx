@@ -80,7 +80,7 @@ export type InkStroke = {
   omrChoice?: number;
 };
 
-export type SoloTool = "pen" | "erase" | 1 | 2 | 3 | 4 | 5;
+export type SoloTool = "pen" | "erase" | "pan" | 1 | 2 | 3 | 4 | 5;
 
 type Props = {
   src: string;
@@ -340,6 +340,7 @@ const PaperPage = memo(function PaperPage({
     if (event.pointerType === "pen" && drawingType.current === "touch") {
       discardStroke();
     }
+    if (tool === "pan") return;
     if (!shouldAcceptInk(event)) return;
     if (drawingId.current != null && drawingId.current !== event.pointerId) return;
 
@@ -455,6 +456,7 @@ const PaperPage = memo(function PaperPage({
         ref={inkRef}
         className={cn(
           "absolute inset-0 h-full w-full touch-none select-none",
+          tool === "pan" && "pointer-events-none",
           tool === "erase" ? "cursor-cell" : "cursor-crosshair",
         )}
         style={{ touchAction: "none", WebkitUserSelect: "none" }}

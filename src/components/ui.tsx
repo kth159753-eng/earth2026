@@ -158,18 +158,24 @@ export function HeaderIconWell({
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={cn("flex min-w-0 items-center", compact ? "gap-2" : "gap-3")}>
+    <div className={cn("flex min-w-0 items-center", compact ? "gap-2" : "gap-2.5 sm:gap-3")}>
       <p className="shrink-0 text-[22px] font-bold tracking-[-0.07em] text-[#e50914] sm:text-[26px]">
         EARTH
       </p>
       {compact ? (
         <p className="truncate text-[11px] font-semibold text-[#b3b3b3]">2026</p>
       ) : (
-        <div className="leading-tight">
-          <p className="text-[11px] font-semibold text-[#b3b3b3]">2026</p>
-          <p className="text-[11px] text-[#808080]">지구과학</p>
-          <p className="text-[11px] text-[#808080]">실전 모의고사</p>
-        </div>
+        <p className="min-w-0 truncate whitespace-nowrap text-[clamp(10px,2.7vw,13px)] font-medium leading-none tracking-tight">
+          <span className="font-semibold tabular-nums text-[#e8e8e8]">2026</span>
+          <span className="mx-[0.42em] text-[#c4a574]" aria-hidden>
+            ·
+          </span>
+          <span className="text-[#b8b8b8]">지구과학</span>
+          <span className="mx-[0.42em] text-[#c4a574]" aria-hidden>
+            ·
+          </span>
+          <span className="text-[#b8b8b8]">실전 모의고사</span>
+        </p>
       )}
     </div>
   );

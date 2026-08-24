@@ -483,29 +483,29 @@ export function ExamHall({ session, classes }: Props) {
               >
                 몰입 종료<span className="hidden sm:inline"> · ESC</span>
               </button>
-              <div className="relative mx-auto flex h-full w-full max-w-[1680px] flex-col items-center justify-center px-4 py-6 sm:px-8">
+              <div className="relative mx-auto flex h-full w-full max-w-[1680px] -translate-y-[1cm] flex-col items-center justify-center px-4 py-6 sm:px-8">
                 <div className="text-center">
-                  <p className="text-[clamp(1.5rem,3.6vw,2.75rem)] font-bold leading-none tracking-[-0.04em] text-[#e50914]">
+                  <p className="text-[clamp(1.85rem,4.4vw,3.35rem)] font-bold leading-none tracking-[-0.04em] text-[#e50914]">
                     2027 대수능 {suneungCountdown()}
                   </p>
-                  <p className="mt-3 text-[clamp(0.95rem,1.8vw,1.25rem)] tracking-[0.08em] text-[#c4a0a0]">
+                  <p className="mt-3.5 text-[clamp(1.05rem,2.1vw,1.45rem)] tracking-[0.08em] text-[#c4a0a0]">
                     2026년 11월 19일 목요일
                   </p>
-                  <p className="mt-4 text-[clamp(0.95rem,1.6vw,1.2rem)] font-semibold text-[#9a9a9a]">
+                  <p className="mt-4 text-[clamp(1.05rem,1.9vw,1.4rem)] font-semibold text-[#9a9a9a]">
                     {session.label}
                     <span className="mx-2 text-[#4a4a4a]">·</span>
                     {gradeLabel(grade)} {classLabel(classNumber)}
                   </p>
                 </div>
 
-                <div className="mt-4 grid w-full grid-cols-2 items-center gap-3 sm:mt-8 sm:grid-cols-[minmax(110px,176px)_minmax(0,1fr)_minmax(110px,176px)] sm:gap-6 lg:gap-8">
+                <div className="mt-3 grid w-full grid-cols-2 items-center gap-3 sm:mt-6 sm:grid-cols-[minmax(110px,176px)_minmax(0,1fr)_minmax(110px,176px)] sm:gap-6 lg:gap-8">
                   <div className="col-span-2 min-w-0 text-center sm:col-auto sm:order-2">
-                    <p className="mb-2 text-[11px] tracking-[0.28em] text-[#6a6a6a] sm:text-xs">
+                    <p className="mb-2 text-[12px] tracking-[0.28em] text-[#6a6a6a] sm:text-sm">
                       남은 시간
                     </p>
                     <div
                       className="leading-none"
-                      style={{ fontSize: "clamp(4.4rem, 23vw, 19.5rem)" }}
+                      style={{ fontSize: "clamp(5.6rem, 28vw, 23.5rem)" }}
                     >
                       <ClockFace display={display} remaining={remaining} alarm={alarm} />
                     </div>
@@ -583,7 +583,7 @@ function ImmersiveQr({
           </div>
         </div>
       )}
-      <p className="mt-2.5 text-center text-[20px] font-bold tracking-[0.18em] text-[#ffd400] sm:text-[21px]">
+      <p className="mt-3 text-center text-[clamp(1.85rem,3.6vw,2.75rem)] font-black tracking-[0.14em] text-[#ffd400]">
         {label}
       </p>
     </div>

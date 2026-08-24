@@ -1,9 +1,10 @@
 "use client";
 
 import { ActiveClassControl } from "@/components/ClassIdentity";
+import { ExamWarmCache, PapersKeepAlive } from "@/components/ExamPaperCache";
 import { BrandMark, HeaderIconWell, headerChipClass } from "@/components/ui";
 import { logoutTeacher } from "@/lib/auth";
-import { EXAM_SESSIONS, groupSessionsByYear, type ExamSession } from "@/lib/exams";
+import { EXAM_SESSIONS, groupSessionsByYear, warmExamSession, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -15,7 +16,6 @@ const TEACHER_NAV = [
   { id: "solo", href: "/solo", kicker: "나혼자", label: "기출학습", short: "나혼자" },
   { id: "papers", href: "/papers", kicker: "자료", label: "문제·정답", short: "문제" },
   { id: "admin", href: "/admin", kicker: "관리", label: "관리자", short: "관리자" },
-  { id: "vault", href: "/vault", kicker: "보관", label: "보관소", short: "보관소" },
 ] as const;
 
 const STUDENT_NAV = [
@@ -61,6 +61,8 @@ export function TeacherShell({
   const sessionId = searchParams.get("session") || sessionFromPath(pathname);
   const grouped = useMemo(() => groupSessionsByYear(), []);
   const solo = section === "solo";
+  const papers = section === "papers";
+  const dockSidebar = desktopOpen && !papers;
 
   useEffect(() => {
     try {
@@ -87,25 +89,27 @@ export function TeacherShell({
   }
 
   return (
-    <div className={cn("min-h-dvh bg-[#141414] text-white", solo && "flex h-dvh flex-col overflow-hidden")}>
-      <div className="sticky top-0 z-40 flex items-center justify-between bg-[#141414] px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-[4%] lg:hidden">
-        <BrandMark compact />
-        <button
-          type="button"
-          className={headerChipClass(open, "ghost")}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <HeaderIconWell active={open}>
-            <PanelIcon open={open} />
-          </HeaderIconWell>
-          회차
-        </button>
-      </div>
+    <div className={cn("min-h-dvh bg-[#141414] text-white", (solo || papers) && "flex h-dvh flex-col overflow-hidden")}>
+      {papers ? null : (
+        <div className="sticky top-0 z-40 flex items-center justify-between bg-[#141414] px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-[4%] lg:hidden">
+          <BrandMark compact />
+          <button
+            type="button"
+            className={headerChipClass(open, "ghost")}
+            onClick={() => setOpen((value) => !value)}
+          >
+            <HeaderIconWell active={open}>
+              <PanelIcon open={open} />
+            </HeaderIconWell>
+            회차
+          </button>
+        </div>
+      )}
 
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/85 lg:hidden"
+          className={cn("fixed inset-0 z-30 bg-black/85", !papers && "lg:hidden")}
           aria-label="닫기"
           onClick={() => setOpen(false)}
         />
@@ -113,9 +117,10 @@ export function TeacherShell({
 
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex transition-transform duration-[250ms]",
+          "fixed inset-y-0 left-0 z-40 flex transition-transform duration-150",
           open ? "translate-x-0" : "-translate-x-full",
-          desktopOpen ? "lg:translate-x-0" : "lg:-translate-x-full",
+          dockSidebar ? "lg:translate-x-0" : "lg:-translate-x-full",
+          open && "lg:translate-x-0",
         )}
       >
         <aside className="w-[min(252px,78vw)] overflow-y-auto bg-black px-2 py-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] md:w-[220px] lg:w-[228px]">
@@ -129,11 +134,11 @@ export function TeacherShell({
             <p className="mt-1 truncate text-sm font-bold text-white">{profile.full_name}</p>
           </div>
           {Object.entries(grouped).map(([year, sessions], index) => (
-            <div key={year} className="mb-6">
+            <div key={year} className="mb-3">
               {index > 0 ? (
-                <div className="mb-4 px-1">
+                <div className="mb-2 px-1">
                   <div className="h-[2px] bg-[#c4a574]" />
-                  <div className="my-2.5 flex items-center gap-3">
+                  <div className="my-1.5 flex items-center gap-3">
                     <p className="text-[13px] font-bold tracking-[0.36em] text-[#c4a574]">{year}</p>
                     <span className="h-[3px] flex-1 bg-gradient-to-r from-[#c4a574] via-[#e50914]/70 to-transparent" />
                   </div>
@@ -145,7 +150,7 @@ export function TeacherShell({
                   <span className="mb-1 ml-3 h-px flex-1 bg-gradient-to-r from-[#3a3a3a] to-transparent" />
                 </div>
               )}
-              <div className="space-y-1">
+              <div className="space-y-0">
                 {sessions.map((session) => (
                   <SessionLink
                     key={session.id}
@@ -163,22 +168,23 @@ export function TeacherShell({
 
       <div
         className={cn(
-          "transition-[padding] duration-[250ms]",
-          desktopOpen && "lg:pl-[228px] xl:pl-[236px]",
-          solo && "flex min-h-0 flex-1 flex-col overflow-hidden",
+          "transition-[padding] duration-150",
+          dockSidebar && "lg:pl-[228px] xl:pl-[236px]",
+          (solo || papers) && "flex min-h-0 flex-1 flex-col overflow-hidden",
         )}
       >
         <header className="sticky top-0 z-20 shrink-0 border-b border-white/[0.06] bg-[#141414] px-2 py-1.5 sm:px-3 sm:py-2 lg:px-3 lg:pt-[max(0.5rem,env(safe-area-inset-top))] xl:pr-[4%]">
           <div className="flex flex-wrap items-center gap-1.5 md:flex-nowrap md:gap-2">
             <button
               type="button"
-              onClick={() => setDesktopSidebar(!desktopOpen)}
-              className={cn(headerChipClass(false, "ghost"), "hidden lg:inline-flex")}
+              onClick={() => (papers ? setOpen((value) => !value) : setDesktopSidebar(!desktopOpen))}
+              className={cn(headerChipClass(open && papers, "ghost"), papers ? "inline-flex" : "hidden lg:inline-flex")}
             >
-              <HeaderIconWell>
-                <PanelIcon open={desktopOpen} />
+              <HeaderIconWell active={open && papers}>
+                <PanelIcon open={papers ? open : desktopOpen} />
               </HeaderIconWell>
-              <NavCopy kicker="회차" label={desktopOpen ? "접기" : "펼치기"} />
+              <span className="md:hidden">회차</span>
+              <NavCopy kicker="회차" label={papers ? (open ? "닫기" : "열기") : desktopOpen ? "접기" : "펼치기"} />
             </button>
             {student ? null : <ActiveClassControl />}
             <button
@@ -212,16 +218,17 @@ export function TeacherShell({
                 );
               })}
             </nav>
-            <div id="earth-header-timer" className="hidden min-w-0 shrink-0 lg:flex lg:items-center" />
+            <div id="earth-header-timer" className="hidden min-w-0 shrink-0 lg:flex lg:items-center lg:justify-end" />
           </div>
         </header>
         <div
           className={cn(
             "flex flex-col pb-[env(safe-area-inset-bottom)]",
-            solo ? "min-h-0 flex-1 overflow-hidden" : "min-h-[calc(100dvh-72px)]",
+            solo || papers ? "min-h-0 flex-1 overflow-hidden" : "min-h-[calc(100dvh-72px)]",
           )}
         >
-          {children}
+          {papers ? <PapersKeepAlive sessionId={sessionId} /> : children}
+          {solo ? <ExamWarmCache sessionId={sessionId} /> : null}
         </div>
       </div>
     </div>
@@ -351,9 +358,12 @@ function SessionLink({
   return (
     <Link
       href={href}
+      prefetch
       onClick={onClick}
+      onPointerEnter={() => warmExamSession(session)}
+      onFocus={() => warmExamSession(session)}
       className={cn(
-        "relative block rounded-[4px] px-3 py-2.5 transition duration-150",
+        "relative block rounded-[4px] px-3 py-1.5 transition duration-150",
         active
           ? "bg-[#1c1c1c]"
           : "[@media(hover:hover)]:hover:bg-[#161616] active:bg-[#1a1a1a]",
@@ -361,7 +371,7 @@ function SessionLink({
     >
       <span
         className={cn(
-          "absolute bottom-2 top-2 left-0 w-[2px] rounded-full",
+          "absolute bottom-1.5 top-1.5 left-0 w-[2px] rounded-full",
           active ? "bg-[#e50914]" : official ? "bg-[#c4a574]" : "bg-transparent",
         )}
       />
@@ -387,7 +397,7 @@ function SessionLink({
           </span>
         </span>
       </span>
-      <span className="mt-1 block text-[11px] text-[#8a8a8a]">{session.subjectName}</span>
+      <span className="mt-0.5 block text-[11px] leading-tight text-[#8a8a8a]">{session.subjectName}</span>
     </Link>
   );
 }

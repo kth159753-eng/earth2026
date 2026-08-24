@@ -7,7 +7,6 @@ import type { ReportSource, StudentPaper } from "@/lib/types";
 import { classLabel, cn, formatScore, gradeLabel, studentLabel } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 
-type ScoreFilter = "all" | "high" | "mid" | "low";
 type SourceFilter = "all" | ReportSource;
 type RetryItem = {
   sessionId: string;
@@ -46,16 +45,9 @@ function paperGrade(row: StudentPaper) {
   };
 }
 
-function matchesFilters(row: StudentPaper, year: number | "all", scoreFilter: ScoreFilter) {
-  const session = getSession(row.session_id);
-  if (year !== "all" && session?.year !== year) return false;
-  const graded = paperGrade(row);
-  if (scoreFilter === "all") return true;
-  if (!graded.graded) return false;
-  if (scoreFilter === "high" && graded.score < 40) return false;
-  if (scoreFilter === "mid" && (graded.score < 20 || graded.score >= 40)) return false;
-  if (scoreFilter === "low" && graded.score >= 20) return false;
-  return true;
+function matchesYear(row: StudentPaper, year: number | "all") {
+  if (year === "all") return true;
+  return getSession(row.session_id)?.year === year;
 }
 
 export function StudentReport() {
@@ -64,7 +56,6 @@ export function StudentReport() {
   const [ready, setReady] = useState(false);
   const [source, setSource] = useState<SourceFilter>("all");
   const [year, setYear] = useState<number | "all">("all");
-  const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
   const [retry, setRetry] = useState<{
     year: number;
     focus: number;
@@ -86,12 +77,12 @@ export function StudentReport() {
   }, []);
 
   const classPapers = useMemo(
-    () => classroom.filter((row) => matchesFilters(row, year, scoreFilter)),
-    [classroom, scoreFilter, year],
+    () => classroom.filter((row) => matchesYear(row, year)),
+    [classroom, year],
   );
   const soloPapers = useMemo(
-    () => solo.filter((row) => matchesFilters(row, year, scoreFilter)),
-    [scoreFilter, solo, year],
+    () => solo.filter((row) => matchesYear(row, year)),
+    [solo, year],
   );
 
   function openRetry(row: StudentPaper, question: number) {
@@ -127,41 +118,33 @@ export function StudentReport() {
 
   const visibleClass = source !== "solo";
   const visibleSolo = source !== "class";
-  const emptyAll = classPapers.length === 0 && soloPapers.length === 0;
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-3 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-5 md:px-6">
-      <h1 className="text-[22px] font-black tracking-tight sm:text-[28px] md:text-[32px]">보관소</h1>
-      <p className="mt-1.5 max-w-xl text-[13px] leading-6 text-[#9a9a9a] sm:text-sm">
-        수업시간에 낸 보고서와 나혼자 학습 보고서를 나눠 둡니다.
-      </p>
-
-      <div className="mt-4">
-        <div className="grid grid-cols-3 gap-1 rounded-[8px] bg-[#1a1a1a] p-1 sm:max-w-lg">
-          {(
-            [
-              { id: "all", label: "전체", count: classPapers.length + soloPapers.length },
-              { id: "class", label: "수업시간", count: classPapers.length },
-              { id: "solo", label: "나혼자", count: soloPapers.length },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setSource(item.id)}
-              className={cn(
-                "flex min-h-11 flex-col items-center justify-center rounded-[6px] px-1 py-1.5",
-                source === item.id ? "bg-[#e50914] text-white" : "text-[#c8c8c8]",
-              )}
-            >
-              <span className="text-[13px] font-black sm:text-sm">{item.label}</span>
-              <span className="text-[10px] font-bold tabular-nums opacity-80">{item.count}건</span>
-            </button>
-          ))}
-        </div>
+    <main className="mx-auto w-full max-w-4xl px-3 py-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-5 md:px-6">
+      <div className="grid grid-cols-3 gap-1 rounded-[8px] bg-[#1a1a1a] p-1 sm:max-w-lg">
+        {(
+          [
+            { id: "all", label: "전체", count: classPapers.length + soloPapers.length },
+            { id: "class", label: "수업시간", count: classPapers.length },
+            { id: "solo", label: "나혼자", count: soloPapers.length },
+          ] as const
+        ).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setSource(item.id)}
+            className={cn(
+              "flex min-h-11 flex-col items-center justify-center rounded-[6px] px-1 py-1.5",
+              source === item.id ? "bg-[#e50914] text-white" : "text-[#c8c8c8]",
+            )}
+          >
+            <span className="text-[13px] font-black sm:text-sm">{item.label}</span>
+            <span className="text-[10px] font-bold tabular-nums opacity-80">{item.count}건</span>
+          </button>
+        ))}
       </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3">
         <FilterRow
           label="연도"
           value={String(year)}
@@ -172,29 +155,9 @@ export function StudentReport() {
             { id: "2026", label: "2026" },
           ]}
         />
-        <FilterRow
-          label="점수"
-          value={scoreFilter}
-          onChange={(value) => setScoreFilter(value as ScoreFilter)}
-          options={[
-            { id: "all", label: "전체" },
-            { id: "high", label: "40↑" },
-            { id: "mid", label: "20~39" },
-            { id: "low", label: "20↓" },
-          ]}
-        />
       </div>
 
       {!ready ? <div className="min-h-[20vh]" /> : null}
-
-      {ready && emptyAll ? (
-        <p className="mt-6 rounded-[8px] border border-white/8 bg-[#1f1f1f] px-4 py-8 text-center text-sm leading-6 text-[#808080]">
-          아직 보관된 보고서가 없습니다.
-          <span className="mt-1 block text-[#9a9a9a]">
-            교실 OMR을 내면 수업시간 칸에, 나혼자 학습에서 채점하면 나혼자 칸에 쌓입니다.
-          </span>
-        </p>
-      ) : null}
 
       <div
         className={cn(
@@ -207,7 +170,6 @@ export function StudentReport() {
             source="class"
             title="수업시간에 한 보고서"
             hint="교실에서 OMR로 제출한 시험입니다."
-            empty="아직 수업시간에 제출한 보고서가 없습니다."
             rows={classPapers}
             onRetry={openRetry}
           />
@@ -217,7 +179,6 @@ export function StudentReport() {
             source="solo"
             title="나혼자학습으로 한 보고서"
             hint="스스로 풀고 바로 채점한 시험입니다."
-            empty="아직 나혼자 학습 보고서가 없습니다."
             rows={soloPapers}
             onRetry={openRetry}
           />
@@ -231,14 +192,12 @@ function ReportSection({
   source,
   title,
   hint,
-  empty,
   rows,
   onRetry,
 }: {
   source: ReportSource;
   title: string;
   hint: string;
-  empty: string;
   rows: StudentPaper[];
   onRetry: (row: StudentPaper, question: number) => void;
 }) {
@@ -278,9 +237,7 @@ function ReportSection({
         </span>
       </header>
 
-      {rows.length === 0 ? (
-        <p className="px-4 py-7 text-center text-sm leading-6 text-[#808080]">{empty}</p>
-      ) : (
+      {rows.length === 0 ? null : (
         <div className="divide-y divide-white/8">
           {rows.map((row) => (
             <PaperCard key={row.id} row={row} onRetry={onRetry} />

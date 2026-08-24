@@ -10,8 +10,12 @@ import {
   QUESTION_COUNT,
   defaultPoints,
   examViewerUrls,
+  nearbyExamSessions,
+  warmExamCatalog,
+  warmExamSession,
   type ExamSession,
 } from "@/lib/exams";
+import { useProfile } from "@/lib/profile-context";
 import { cn, formatClock } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -62,26 +66,36 @@ export function SoloStudy({
   onBack?: () => void;
 }) {
   const router = useRouter();
+  const profile = useProfile();
+  const showVault = !guest && profile?.role !== "teacher";
   const files = useMemo(() => examViewerUrls(session), [session]);
-  const paperSrc = files.paperLocal ?? (files.paper && !files.paper.includes("drive.google.com") ? files.paper : null);
-  const driveSrc = files.paperDrive;
+  const localSrc = files.paperLocal;
+  const driveSrc = files.paperDrive ?? (files.paper?.includes("drive.google.com") ? files.paper : null);
+  const [localReady, setLocalReady] = useState(false);
   const [paperFailed, setPaperFailed] = useState(false);
+  const paperSrc = localReady && localSrc && !paperFailed ? localSrc : null;
   const onPaperError = useCallback(() => setPaperFailed(true), []);
-  const [tool, setTool] = useState<SoloTool>("pen");
+  const [tool, setTool] = useState<SoloTool>(guest ? "pan" : "pen");
   const [color, setColor] = useState<(typeof COLORS)[number]["value"]>(COLORS[0].value);
   const [omrOpen, setOmrOpen] = useState(false);
   const [omrDesktop, setOmrDesktop] = useState(true);
   const [wide, setWide] = useState(false);
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [focusQuestion, setFocusQuestion] = useState<number | null>(null);
   const paperPane = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(1);
   const [grade, setGrade] = useState(initialGrade ?? 3);
   const [classNumber, setClassNumber] = useState(initialClass ?? 1);
   const [studentNumber, setStudentNumber] = useState(1);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<number[]>(() => Array(QUESTION_COUNT).fill(0));
   const [strokes, setStrokes] = useState<InkStroke[]>([]);
+  const answersRef = useRef<number[]>(answers);
+  const strokesRef = useRef<InkStroke[]>(strokes);
+  const historyRef = useRef<Array<{ answers: number[]; strokes: InkStroke[] }>>([]);
+  const [historySize, setHistorySize] = useState(0);
+  answersRef.current = answers;
+  strokesRef.current = strokes;
   const [keyAnswers, setKeyAnswers] = useState<number[] | null>(null);
   const [points, setPoints] = useState<number[]>(defaultPoints);
   const [result, setResult] = useState<Result | null>(null);
@@ -124,7 +138,8 @@ export function SoloStudy({
 
   useEffect(() => {
     setPaperFailed(false);
-    setFocusQuestion(null);
+    historyRef.current = [];
+    setHistorySize(0);
     try {
       const raw = localStorage.getItem(storageKey(session.id));
       if (!raw) {
@@ -190,39 +205,23 @@ export function SoloStudy({
   }, [answers, strokes, grade, classNumber, studentNumber, session.id]);
 
   useEffect(() => {
+    warmExamSession(session);
+    for (const item of nearbyExamSessions(session)) warmExamSession(item);
+    warmExamCatalog(session);
     const nodes = [
       Object.assign(document.createElement("link"), {
         rel: "prefetch",
         href: `${BASE_PATH}/pdf.worker.min.mjs`,
       }),
     ];
-    if (paperSrc && window.matchMedia("(min-width: 1024px)").matches) {
-      nodes.push(
-        Object.assign(document.createElement("link"), {
-          rel: "prefetch",
-          as: "fetch",
-          href: paperSrc,
-        }),
-      );
-    }
     nodes.forEach((node) => document.head.appendChild(node));
     return () => nodes.forEach((node) => node.remove());
-  }, [paperSrc]);
+  }, [session]);
 
   useEffect(() => {
-    if (!paperSrc) return;
-    let cancelled = false;
-    fetch(paperSrc, { method: "HEAD" })
-      .then((response) => {
-        if (!cancelled && response.status === 404) setPaperFailed(true);
-      })
-      .catch(() => {
-        if (!cancelled) setPaperFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [paperSrc]);
+    setLocalReady(false);
+    setPaperFailed(false);
+  }, [session.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,7 +262,7 @@ export function SoloStudy({
       if (target?.closest("input, textarea, select, [contenteditable=true]")) return;
       if (event.key.toLowerCase() === "z" && !event.shiftKey) {
         event.preventDefault();
-        undoStroke();
+        undoWork();
         return;
       }
       if (event.key === "=" || event.key === "+") {
@@ -278,7 +277,7 @@ export function SoloStudy({
       }
       if (event.key === "0") {
         event.preventDefault();
-        setZoom(1);
+        applyView(1);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -289,12 +288,64 @@ export function SoloStudy({
     const pane = paperPane.current;
     if (!pane) return;
     const onWheel = (event: WheelEvent) => {
+      if (!(event.ctrlKey || event.metaKey || event.deltaY)) return;
       if (!(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       bumpZoom(event.deltaY < 0 ? 1 : -1);
     };
     pane.addEventListener("wheel", onWheel, { passive: false });
     return () => pane.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    const pane = paperPane.current;
+    if (!pane) return;
+    let pinching = false;
+    let startDist = 1;
+    let startZoom = 1;
+    let startScroll = { left: 0, top: 0 };
+    let startMid = { x: 0, y: 0 };
+
+    function distance(a: Touch, b: Touch) {
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    }
+
+    function onStart(event: TouchEvent) {
+      if (event.touches.length !== 2) return;
+      pinching = true;
+      startDist = distance(event.touches[0], event.touches[1]) || 1;
+      startZoom = zoomRef.current;
+      startScroll = { left: pane.scrollLeft, top: pane.scrollTop };
+      const box = pane.getBoundingClientRect();
+      startMid = {
+        x: (event.touches[0].clientX + event.touches[1].clientX) / 2 - box.left,
+        y: (event.touches[0].clientY + event.touches[1].clientY) / 2 - box.top,
+      };
+    }
+
+    function onMove(event: TouchEvent) {
+      if (!pinching || event.touches.length !== 2) return;
+      event.preventDefault();
+      const nextZoom = Math.min(3, Math.max(0.5, startZoom * (distance(event.touches[0], event.touches[1]) / startDist)));
+      applyView(nextZoom);
+      pane.scrollLeft = ((startScroll.left + startMid.x) / startZoom) * nextZoom - startMid.x;
+      pane.scrollTop = ((startScroll.top + startMid.y) / startZoom) * nextZoom - startMid.y;
+    }
+
+    function onEnd(event: TouchEvent) {
+      if (event.touches.length < 2) pinching = false;
+    }
+
+    pane.addEventListener("touchstart", onStart, { capture: true, passive: true });
+    pane.addEventListener("touchmove", onMove, { capture: true, passive: false });
+    pane.addEventListener("touchend", onEnd, { capture: true });
+    pane.addEventListener("touchcancel", onEnd, { capture: true });
+    return () => {
+      pane.removeEventListener("touchstart", onStart, true);
+      pane.removeEventListener("touchmove", onMove, true);
+      pane.removeEventListener("touchend", onEnd, true);
+      pane.removeEventListener("touchcancel", onEnd, true);
+    };
   }, []);
 
   function applyDuration() {
@@ -318,69 +369,126 @@ export function SoloStudy({
     endAt.current = null;
   }
 
+  function persistDraft(nextAnswers: number[], nextStrokes: InkStroke[]) {
+    try {
+      localStorage.setItem(
+        storageKey(session.id),
+        JSON.stringify({ answers: nextAnswers, strokes: nextStrokes, grade, classNumber, studentNumber }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function rememberWork() {
+    historyRef.current = [
+      ...historyRef.current.slice(-49),
+      { answers: answersRef.current.slice(), strokes: strokesRef.current.slice() },
+    ];
+    setHistorySize(historyRef.current.length);
+  }
+
+  function applyDraft(nextAnswers: number[], nextStrokes: InkStroke[]) {
+    answersRef.current = nextAnswers;
+    strokesRef.current = nextStrokes;
+    setAnswers(nextAnswers);
+    setStrokes(nextStrokes);
+    persistDraft(nextAnswers, nextStrokes);
+  }
+
   function setAnswer(question: number, choice: number) {
-    setAnswers((currentAnswers) => {
-      const next = [...currentAnswers];
-      next[question] = currentAnswers[question] === choice ? 0 : choice;
-      return next;
-    });
+    const currentAnswers = answersRef.current;
+    const nextValue = currentAnswers[question] === choice ? 0 : choice;
+    if (nextValue === currentAnswers[question]) return;
+    rememberWork();
+    const next = [...currentAnswers];
+    next[question] = nextValue;
+    applyDraft(next, strokesRef.current);
     setCurrent(question);
     setResult(null);
   }
 
   const markFromPaper = useCallback((choice: number, questionIndex = current) => {
     const question = Math.min(QUESTION_COUNT - 1, Math.max(0, questionIndex));
-    setAnswers((currentAnswers) => {
-      const next = [...currentAnswers];
-      next[question] = choice;
-      return next;
-    });
+    const next = [...answersRef.current];
+    next[question] = choice;
+    answersRef.current = next;
+    setAnswers(next);
     setCurrent(question);
     setResult(null);
   }, [current]);
 
-  function undoStroke() {
-    setStrokes((currentStrokes) => {
-      const last = currentStrokes[currentStrokes.length - 1];
-      const question = last?.question;
-      const choice = last?.omrChoice ?? last?.mark;
-      if (question !== undefined && choice) {
-        setAnswers((currentAnswers) => {
-          if (currentAnswers[question] !== choice) return currentAnswers;
-          const next = [...currentAnswers];
-          next[question] = 0;
-          return next;
-        });
-      }
-      return currentStrokes.slice(0, -1);
-    });
+  function handleStrokes(next: InkStroke[] | ((current: InkStroke[]) => InkStroke[])) {
+    const current = strokesRef.current;
+    const resolved = typeof next === "function" ? next(current) : next;
+    if (resolved === current) return;
+    rememberWork();
+    applyDraft(answersRef.current, resolved);
   }
 
-  function focusItem(question: number | null) {
-    setFocusQuestion(question);
-    if (question) {
-      setCurrent(question - 1);
-      setZoom((current) => (current < 1.5 ? 1.5 : current));
-    } else {
-      setZoom(1);
+  function undoWork() {
+    const snapshot = historyRef.current.pop();
+    if (snapshot) {
+      setHistorySize(historyRef.current.length);
+      applyDraft(snapshot.answers, snapshot.strokes);
+      setResult(null);
+      setMessage("");
+      return;
     }
+
+    const currentStrokes = strokesRef.current;
+    if (currentStrokes.length > 0) {
+      const last = currentStrokes[currentStrokes.length - 1];
+      const nextStrokes = currentStrokes.slice(0, -1);
+      let nextAnswers = answersRef.current;
+      const question = last?.question;
+      const choice = last?.omrChoice ?? last?.mark;
+      if (question !== undefined && choice && nextAnswers[question] === choice) {
+        nextAnswers = [...nextAnswers];
+        nextAnswers[question] = 0;
+      }
+      applyDraft(nextAnswers, nextStrokes);
+      setResult(null);
+      setMessage("");
+      return;
+    }
+
+    const filled = answersRef.current
+      .map((value, index) => (value > 0 ? index : -1))
+      .filter((index) => index >= 0);
+    if (filled.length === 0) return;
+    const nextAnswers = [...answersRef.current];
+    nextAnswers[filled[filled.length - 1]] = 0;
+    applyDraft(nextAnswers, currentStrokes);
+    setResult(null);
+    setMessage("");
+  }
+
+  function applyView(nextZoom: number) {
+    const z = Math.min(3, Math.max(0.5, nextZoom));
+    zoomRef.current = z;
+    setZoom(z);
   }
 
   function bumpZoom(direction: 1 | -1) {
-    setZoom((current) => {
-      const index = ZOOM_STEPS.reduce((best, step, stepIndex) => {
-        return Math.abs(step - current) < Math.abs(ZOOM_STEPS[best] - current) ? stepIndex : best;
-      }, 0);
-      return ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, index + direction))];
-    });
+    const index = ZOOM_STEPS.reduce((best, step, stepIndex) => {
+      return Math.abs(step - zoomRef.current) < Math.abs(ZOOM_STEPS[best] - zoomRef.current)
+        ? stepIndex
+        : best;
+    }, 0);
+    applyView(ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, index + direction))]);
   }
 
   function resetWork() {
-    setStrokes([]);
-    setAnswers(Array(QUESTION_COUNT).fill(0));
+    const emptyAnswers = Array(QUESTION_COUNT).fill(0);
+    const hasWork = strokesRef.current.length > 0 || answersRef.current.some((value) => value > 0);
+    if (!hasWork && zoomRef.current === 1 && !result) return;
+    if (hasWork) rememberWork();
+    applyDraft(emptyAnswers, []);
     setCurrent(0);
     setResult(null);
     setMessage("");
+    applyView(1);
   }
 
   async function gradePaper() {
@@ -415,7 +523,7 @@ export function SoloStudy({
         total,
         wrongQuestions: wrong,
       });
-      if (!guest) router.push("/vault/");
+      if (showVault) router.push("/vault/");
     } catch {
       setMessage("채점은 끝났습니다. 보관소 저장에 실패했습니다.");
     } finally {
@@ -461,16 +569,16 @@ export function SoloStudy({
               </p>
             </div>
           ) : null}
-          <div className={cn("grid gap-2", guest ? "grid-cols-1" : "grid-cols-[1fr_auto]")}>
+          <div className={cn("grid gap-2", showVault ? "grid-cols-[1fr_auto]" : "grid-cols-1")}>
             <button
               type="button"
               onClick={() => void gradePaper()}
               disabled={saving}
               className="h-11 rounded-[2px] bg-[#c41e3a] text-sm font-black text-white hover:bg-[#a01830] disabled:opacity-60"
             >
-              {saving ? "보관소로 이동 중..." : "채점하기"}
+              {saving ? (showVault ? "보관소로 이동 중..." : "저장 중...") : "채점하기"}
             </button>
-            {guest ? null : (
+            {showVault ? (
               <button
                 type="button"
                 onClick={() => router.push("/vault/")}
@@ -478,12 +586,30 @@ export function SoloStudy({
               >
                 보관소
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       }
     />
   );
+
+  function setMinutesLive(value: number) {
+    const next = Math.max(0, value);
+    setMinutes(next);
+    if (!running) {
+      setRemaining(next * 60 + seconds);
+      setAlarm(false);
+    }
+  }
+
+  function setSecondsLive(value: number) {
+    const next = Math.min(59, Math.max(0, value));
+    setSeconds(next);
+    if (!running) {
+      setRemaining(minutes * 60 + next);
+      setAlarm(false);
+    }
+  }
 
   const timer = (
     <SoloTimerBar
@@ -492,10 +618,12 @@ export function SoloStudy({
       remaining={remaining}
       running={running}
       alarm={alarm}
-      onMinutes={setMinutes}
-      onSeconds={setSeconds}
-      onApply={applyDuration}
-      onToggle={running ? pauseTimer : startTimer}
+      compact={Boolean(headerSlot && wide && !guest)}
+      onMinutes={setMinutesLive}
+      onSeconds={setSecondsLive}
+      onStart={startTimer}
+      onStop={pauseTimer}
+      onReset={applyDuration}
     />
   );
   const timerInHeader = Boolean(headerSlot && wide && !guest);
@@ -528,23 +656,24 @@ export function SoloStudy({
               <button
                 type="button"
                 onClick={onBack}
-                className="h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white"
+                className="h-9 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white"
               >
                 메뉴
               </button>
             ) : null}
-            <div className="min-w-0 flex-1">{timerInHeader ? null : timer}</div>
+            <p className="min-w-0 flex-1 truncate text-sm font-bold leading-5">
+              {session.label}
+            </p>
             {omrButton}
           </div>
         ) : null}
-        <div className={cn("flex items-center gap-2 sm:gap-3", topBar && "mt-1.5")}>
-          <div className="min-w-0 max-w-[42vw] shrink-0 sm:max-w-[220px] xl:max-w-[260px]">
-            <p className="truncate text-sm font-bold leading-5">{session.label}</p>
-            <p className="truncate text-[11px] leading-4 text-[#808080]">
-              {current + 1}번 · 선지만 칠해도 OMR에 입력됩니다
+        {timerInHeader ? null : <div className={cn(topBar && "mt-1.5")}>{timer}</div>}
+        <div className={cn("flex items-center gap-2 sm:gap-3", (topBar || !timerInHeader) && "mt-1.5")}>
+          {topBar ? null : (
+            <p className="min-w-0 max-w-[36vw] shrink-0 truncate text-sm font-bold leading-5 sm:max-w-[220px]">
+              {session.label}
             </p>
-          </div>
-          <span className="hidden h-6 w-px shrink-0 bg-white/15 sm:block" />
+          )}
           <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {COLORS.map((item) => (
             <button
@@ -564,6 +693,28 @@ export function SoloStudy({
               style={{ background: item.value }}
             />
           ))}
+          <button
+            type="button"
+            title="지우개"
+            onClick={() => setTool("erase")}
+            className={cn(
+              "grid h-10 w-10 shrink-0 place-items-center rounded-full border sm:h-9 sm:w-9",
+              tool === "erase" ? "border-white bg-white text-black" : "border-white/20 bg-white/10 text-white",
+            )}
+          >
+            <EraserIcon />
+          </button>
+          <button
+            type="button"
+            title="화면 이동"
+            onClick={() => setTool("pan")}
+            className={cn(
+              "grid h-10 w-10 shrink-0 place-items-center rounded-full border sm:h-9 sm:w-9",
+              tool === "pan" ? "border-white bg-white text-black" : "border-white/20 bg-white/10 text-white",
+            )}
+          >
+            <PanIcon />
+          </button>
           <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-white/15 sm:block" />
           {CHOICES.map((choice) => (
             <button
@@ -571,7 +722,7 @@ export function SoloStudy({
               type="button"
               onClick={() => setTool(choice)}
               className={cn(
-                "grid h-10 w-10 shrink-0 place-items-center rounded-full border text-sm font-bold sm:h-9 sm:w-9",
+                "hidden h-9 w-9 shrink-0 place-items-center rounded-full border text-sm font-bold sm:grid",
                 tool === choice
                   ? "border-[#e50914] bg-[#e50914] text-white"
                   : "border-white/20 text-[#d0d0d0]",
@@ -582,29 +733,22 @@ export function SoloStudy({
           ))}
           <button
             type="button"
-            onClick={() => setTool("erase")}
-            className={cn(
-              "h-10 shrink-0 rounded-[4px] px-3 text-xs font-bold sm:h-9",
-              tool === "erase" ? "bg-white text-black" : "bg-white/10 text-white",
-            )}
+            title="되돌리기"
+            onClick={undoWork}
+            disabled={historySize === 0 && strokes.length === 0 && answers.every((value) => value === 0)}
+            className="h-10 shrink-0 rounded-[4px] bg-white/10 px-2.5 text-xs font-bold text-white disabled:opacity-35 sm:h-9"
           >
-            지우개
+            되돌리기
           </button>
           <button
             type="button"
-            onClick={undoStroke}
-            className="h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold sm:h-9"
-          >
-            실행 취소
-          </button>
-          <button
-            type="button"
+            title="초기화"
             onClick={resetWork}
-            className="h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold sm:h-9"
+            disabled={strokes.length === 0 && answers.every((value) => value === 0) && zoom === 1 && !result}
+            className="h-10 shrink-0 rounded-[4px] bg-[#e50914]/85 px-2.5 text-xs font-bold text-white disabled:opacity-35 sm:h-9"
           >
             초기화
           </button>
-          <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-white/15 sm:block" />
           <div className="flex shrink-0 items-center gap-1 rounded-[4px] bg-white/8 px-1 py-0.5">
             <button
               type="button"
@@ -619,7 +763,7 @@ export function SoloStudy({
             <button
               type="button"
               title="원래 크기"
-              onClick={() => setZoom(1)}
+              onClick={() => applyView(1)}
               className="min-w-12 text-center text-xs font-bold tabular-nums text-white"
             >
               {Math.round(zoom * 100)}%
@@ -638,63 +782,39 @@ export function SoloStudy({
           </div>
           {topBar ? null : omrButton}
         </div>
-        <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
-          <span className="shrink-0 pr-1 text-[10px] font-extrabold tracking-[0.14em] text-[#808080]">
-            문항 확대
-          </span>
-          <button
-            type="button"
-            onClick={() => focusItem(null)}
-            className={cn(
-              "h-8 shrink-0 rounded-[4px] px-2 text-[11px] font-bold",
-              focusQuestion == null ? "bg-white text-black" : "bg-white/10 text-white",
-            )}
-          >
-            전체
-          </button>
-          {Array.from({ length: QUESTION_COUNT }, (_, index) => index + 1).map((question) => (
-            <button
-              key={question}
-              type="button"
-              onClick={() => focusItem(question)}
-              className={cn(
-                "grid h-8 w-8 shrink-0 place-items-center rounded-[4px] text-[12px] font-bold",
-                focusQuestion === question ? "bg-[#e50914] text-white" : "bg-white/10 text-[#d0d0d0]",
-              )}
-            >
-              {question}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="relative min-h-0 flex-1">
-        <div ref={paperPane} className="absolute inset-0 overflow-auto">
-          {paperSrc && !paperFailed ? (
-            <div className="flex min-h-full min-w-full justify-safe-center px-2 py-3 sm:px-4 sm:py-4">
-              <SoloPaper
-                src={paperSrc}
-                tool={tool}
-                color={color}
-                strokes={strokes}
-                onStrokes={setStrokes}
-                onMark={markFromPaper}
-                zoom={zoom}
-                focusQuestion={focusQuestion}
-                onError={onPaperError}
+        <div ref={paperPane} className="absolute inset-0 overflow-auto overscroll-contain">
+          <div
+            className="relative"
+            style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%`, minHeight: "100%" }}
+          >
+            {paperSrc && !paperFailed ? (
+              <div className="min-h-full min-w-full px-2 py-3 sm:px-4 sm:py-4">
+                <SoloPaper
+                  src={paperSrc}
+                  tool={tool}
+                  color={color}
+                  strokes={strokes}
+                  onStrokes={handleStrokes}
+                  onMark={markFromPaper}
+                  zoom={1}
+                  onError={onPaperError}
+                />
+              </div>
+            ) : driveSrc ? (
+              <iframe
+                title={`${session.label} 시험지`}
+                src={driveSrc}
+                className="pointer-events-none h-full w-full border-0 bg-white"
+                allow="autoplay; fullscreen"
+                allowFullScreen
               />
-            </div>
-          ) : driveSrc ? (
-            <iframe
-              title={`${session.label} 시험지`}
-              src={driveSrc}
-              className="h-full min-h-full w-full border-0 bg-white"
-              allow="autoplay; fullscreen"
-              allowFullScreen
-            />
-          ) : (
-            <p className="py-24 text-center text-sm text-[#808080]">이 회차 시험지가 없습니다.</p>
-          )}
+            ) : (
+              <p className="py-24 text-center text-sm text-[#808080]">이 회차 시험지가 없습니다.</p>
+            )}
+          </div>
         </div>
         {omrDesktop ? (
           <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-[260px] lg:block xl:inset-y-3 xl:right-3 xl:w-[300px]">
@@ -734,83 +854,114 @@ function SoloTimerBar({
   remaining,
   running,
   alarm,
+  compact = false,
   onMinutes,
   onSeconds,
-  onApply,
-  onToggle,
+  onStart,
+  onStop,
+  onReset,
 }: {
   minutes: number;
   seconds: number;
   remaining: number;
   running: boolean;
   alarm: boolean;
+  compact?: boolean;
   onMinutes: (value: number) => void;
   onSeconds: (value: number) => void;
-  onApply: () => void;
-  onToggle: () => void;
+  onStart: () => void;
+  onStop: () => void;
+  onReset: () => void;
 }) {
   const clock = formatClock(remaining);
+  const inputClass =
+    "h-8 w-7 bg-transparent text-center text-[16px] font-bold tabular-nums text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
   return (
     <div
       className={cn(
-        "flex max-w-full flex-wrap items-center gap-1 overflow-x-auto rounded-[4px] border px-1.5 py-1 [scrollbar-width:none] sm:gap-1.5",
+        "flex min-w-0 items-center gap-1.5 rounded-[4px] border px-1.5 py-1",
+        compact ? "w-auto" : "w-full",
         alarm ? "border-[#e50914] bg-[#e50914]/15" : "border-[#e50914]/70 bg-black/35",
       )}
     >
-      <label className="flex items-center gap-1 text-[11px] text-[#808080]">
-        분
+      <div className="flex h-8 shrink-0 items-center rounded-[4px] bg-black/45 px-1">
+        <label className="sr-only" htmlFor="solo-timer-min">제한 시간 분</label>
         <input
+          id="solo-timer-min"
           type="number"
           min={0}
           max={180}
           inputMode="numeric"
           value={minutes}
           onChange={(event) => onMinutes(Math.max(0, Number(event.target.value) || 0))}
-          className="h-8 w-10 rounded-[4px] border border-white/15 bg-black/40 text-center text-sm text-white sm:w-11"
+          className={inputClass}
         />
-      </label>
-      <label className="flex items-center gap-1 text-[11px] text-[#808080]">
-        초
+        <span className="px-0.5 text-xs font-bold text-[#808080]">:</span>
+        <label className="sr-only" htmlFor="solo-timer-sec">제한 시간 초</label>
         <input
+          id="solo-timer-sec"
           type="number"
           min={0}
           max={59}
           inputMode="numeric"
           value={seconds}
           onChange={(event) => onSeconds(Math.min(59, Math.max(0, Number(event.target.value) || 0)))}
-          className="h-8 w-10 rounded-[4px] border border-white/15 bg-black/40 text-center text-sm text-white sm:w-11"
+          className={inputClass}
         />
-      </label>
-      <button
-        type="button"
-        onClick={onApply}
-        className="h-8 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white"
-      >
-        적용
-      </button>
+      </div>
       <p
         className={cn(
-          "min-w-[3.5rem] text-center text-sm font-black tabular-nums sm:min-w-[4.25rem] sm:text-base",
+          "min-w-0 flex-1 text-center font-black tabular-nums leading-none",
+          compact ? "text-base" : "text-lg sm:text-xl",
           alarm || remaining <= 60 ? "text-[#e50914]" : "text-white",
         )}
       >
         {clock.label}
       </p>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="h-8 rounded-[4px] bg-[#e50914] px-2.5 text-[11px] font-bold text-white"
-      >
-        {running ? "정지" : "시작"}
-      </button>
-      <button
-        type="button"
-        onClick={onApply}
-        className="h-8 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white"
-      >
-        리셋
-      </button>
+      <div className="grid shrink-0 grid-cols-3 gap-1">
+        <button
+          type="button"
+          onClick={onStart}
+          disabled={running}
+          className="h-8 min-w-11 rounded-[4px] bg-[#e50914] px-1.5 text-[11px] font-bold text-white disabled:bg-white/10 disabled:text-white/45"
+        >
+          시작
+        </button>
+        <button
+          type="button"
+          onClick={onStop}
+          disabled={!running}
+          className="h-8 min-w-11 rounded-[4px] bg-[#e50914] px-1.5 text-[11px] font-bold text-white disabled:bg-white/10 disabled:text-white/45"
+        >
+          정지
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          className="h-8 min-w-11 rounded-[4px] bg-white/12 px-1.5 text-[11px] font-bold text-white"
+        >
+          리셋
+        </button>
+      </div>
     </div>
+  );
+}
+
+function EraserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" aria-hidden>
+      <path d="M14.8 5.4 6.2 14a2.2 2.2 0 0 0 0 3.1l1.8 1.8h5.2L20 11.1z" />
+      <path d="M8.2 19h9.6" />
+    </svg>
+  );
+}
+
+function PanIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" aria-hidden>
+      <path d="M12 3.6v16.8M3.6 12h16.8" strokeLinecap="round" />
+      <path d="m12 3.6 2.4 2.4M12 3.6 9.6 6M12 20.4l2.4-2.4M12 20.4l-2.4-2.4M3.6 12l2.4 2.4M3.6 12l2.4-2.4M20.4 12l-2.4 2.4M20.4 12l-2.4-2.4" strokeLinecap="round" />
+    </svg>
   );
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { deleteStudentSubmissions } from "@/lib/data";
 import { QUESTION_COUNT, getSession } from "@/lib/exams";
 import { GRADE_TONES, bandLabel } from "@/lib/grades";
 import type { ReportStudent, ScoreReport } from "@/lib/types";
@@ -12,10 +13,14 @@ import {
   gradeLabel,
   studentLabel,
 } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 function classKey(grade: number, classNumber: number) {
   return `${grade}-${classNumber}`;
+}
+
+function reportStudentKey(student: Pick<ReportStudent, "grade" | "classNumber" | "studentNumber">) {
+  return `${student.grade}-${student.classNumber}-${student.studentNumber}`;
 }
 
 function studentName(student: ReportStudent, showClass: boolean) {
@@ -45,11 +50,11 @@ function FilterGroup({
   options: { id: string; label: string }[];
 }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-none sm:flex-row sm:items-center sm:gap-2">
-      <span className="shrink-0 text-[10px] font-extrabold tracking-[0.16em] text-[#808080]">
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="shrink-0 text-[10px] font-extrabold tracking-[0.14em] text-[#808080]">
         {label}
       </span>
-      <div className="flex min-w-0 overflow-hidden rounded-[5px] border border-white/10 bg-black/40">
+      <div className="flex min-w-0 overflow-hidden rounded-[4px] bg-black/50">
         {options.map((option) => {
           const active = value === option.id;
           return (
@@ -58,7 +63,7 @@ function FilterGroup({
               type="button"
               onClick={() => onChange(option.id)}
               className={cn(
-                "h-9 min-w-0 flex-1 px-2 text-[12px] font-bold transition duration-150 sm:h-8 sm:flex-none sm:px-3 sm:text-[13px]",
+                "h-7 min-w-0 px-2 text-[11px] font-bold sm:h-8 sm:px-2.5 sm:text-[12px]",
                 active
                   ? "bg-[#e50914] text-white"
                   : "text-[#b4b4b4] hover:bg-white/[0.06] hover:text-white",
@@ -73,7 +78,13 @@ function FilterGroup({
   );
 }
 
-export function ScoreReportBoard({ report }: { report: ScoreReport }) {
+export function ScoreReportBoard({
+  report,
+  onReload,
+}: {
+  report: ScoreReport;
+  onReload?: () => void | Promise<void>;
+}) {
   const classes = useMemo(() => {
     const seen = new Map<string, { grade: number; classNumber: number }>();
     for (const student of report.students) {
@@ -92,6 +103,11 @@ export function ScoreReportBoard({ report }: { report: ScoreReport }) {
   const [year, setYear] = useState<number | "all">("all");
   const [subject, setSubject] = useState<"all" | "I" | "II">("all");
   const [openQuestion, setOpenQuestion] = useState<{ year: number; question: number } | null>(null);
+  const [cleared, setCleared] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setCleared(new Set());
+  }, [report]);
 
   const sessionIds = useMemo(() => {
     return report.sessionIds.filter((id) => {
@@ -103,12 +119,22 @@ export function ScoreReportBoard({ report }: { report: ScoreReport }) {
     });
   }, [report.sessionIds, subject, year]);
 
+  const patchedStudents = useMemo(() => {
+    if (cleared.size === 0) return report.students;
+    return report.students.map((student) => {
+      if (!cleared.has(reportStudentKey(student))) return student;
+      const bySession = { ...student.bySession };
+      for (const id of sessionIds) delete bySession[id];
+      return { ...student, bySession };
+    });
+  }, [cleared, report.students, sessionIds]);
+
   const students = useMemo(() => {
-    return report.students.filter((student) => {
+    return patchedStudents.filter((student) => {
       if (picked === "all") return true;
       return classKey(student.grade, student.classNumber) === picked;
     });
-  }, [picked, report.students]);
+  }, [picked, patchedStudents]);
 
   const stats = useMemo(() => {
     const scores = students.flatMap((student) =>
@@ -181,17 +207,14 @@ export function ScoreReportBoard({ report }: { report: ScoreReport }) {
   const showClass = picked === "all";
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold">성적 대시보드</h2>
-          <p className="mt-1 text-sm text-[#808080]">제출과 오답을 학급 단위로 한눈에 봅니다.</p>
-        </div>
-        <div className="flex w-full overflow-hidden rounded-[5px] border border-white/10 bg-black/40 sm:w-auto">
+    <section className="space-y-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <h2 className="text-[15px] font-bold sm:text-base">성적 대시보드</h2>
+        <div className="flex overflow-hidden rounded-[4px] bg-black/40">
           {(
             [
               ["status", "제출 현황"],
-              ["misses", "연도별 틀린 문항"],
+              ["misses", "틀린 문항"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -199,7 +222,7 @@ export function ScoreReportBoard({ report }: { report: ScoreReport }) {
               type="button"
               onClick={() => setView(id)}
               className={cn(
-                "h-10 flex-1 px-3 text-sm font-bold sm:flex-none sm:px-4",
+                "h-8 px-2.5 text-[12px] font-bold sm:px-3",
                 view === id ? "bg-[#e50914] text-white" : "text-[#b4b4b4] hover:bg-white/[0.06] hover:text-white",
               )}
             >
@@ -209,79 +232,83 @@ export function ScoreReportBoard({ report }: { report: ScoreReport }) {
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex flex-col gap-2 rounded-[6px] border border-white/10 bg-[#1a1a1a] p-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-          <FilterGroup
-            label="연도"
-            value={String(year)}
-            onChange={(value) => setYear(value === "all" ? "all" : Number(value))}
-            options={[
-              { id: "all", label: "전체" },
-              { id: "2025", label: "2025년" },
-              { id: "2026", label: "2026년" },
-            ]}
-          />
-          <span className="hidden h-6 w-px bg-white/10 sm:block" />
-          <FilterGroup
-            label="과목"
-            value={subject}
-            onChange={(value) => setSubject(value as "all" | "I" | "II")}
-            options={[
-              { id: "all", label: "지I·지II" },
-              { id: "I", label: "지I" },
-              { id: "II", label: "지II" },
-            ]}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2 rounded-[6px] border border-[#c4a574]/25 bg-[#1a1a1a] p-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <span className="shrink-0 px-1 text-[10px] font-extrabold tracking-[0.16em] text-[#c4a574]">
-            학급
-          </span>
-          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-            {classes.map((item) => {
-              const id = classKey(item.grade, item.classNumber);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setPicked(id)}
-                  className={cn(
-                    "rounded-[4px] px-3 py-1.5 text-sm font-bold",
-                    picked === id ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
-                  )}
-                >
-                  {gradeLabel(item.grade)} {classLabel(item.classNumber)}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setPicked("all")}
-              className={cn(
-                "rounded-[4px] px-3 py-1.5 text-sm font-bold",
-                picked === "all" ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
-              )}
-            >
-              전체 학급
-            </button>
-          </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[5px] border border-white/10 bg-[#1a1a1a] px-2 py-1.5">
+        <FilterGroup
+          label="연도"
+          value={String(year)}
+          onChange={(value) => setYear(value === "all" ? "all" : Number(value))}
+          options={[
+            { id: "all", label: "전체" },
+            { id: "2025", label: "2025" },
+            { id: "2026", label: "2026" },
+          ]}
+        />
+        <FilterGroup
+          label="과목"
+          value={subject}
+          onChange={(value) => setSubject(value as "all" | "I" | "II")}
+          options={[
+            { id: "all", label: "전체" },
+            { id: "I", label: "지I" },
+            { id: "II", label: "지II" },
+          ]}
+        />
+        <span className="hidden h-5 w-px bg-white/10 sm:block" />
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          <span className="shrink-0 text-[10px] font-extrabold tracking-[0.14em] text-[#c4a574]">학급</span>
+          {classes.map((item) => {
+            const id = classKey(item.grade, item.classNumber);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPicked(id)}
+                className={cn(
+                  "h-7 rounded-[4px] px-2 text-[11px] font-bold sm:px-2.5",
+                  picked === id ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
+                )}
+              >
+                {gradeLabel(item.grade)} {classLabel(item.classNumber)}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setPicked("all")}
+            className={cn(
+              "h-7 rounded-[4px] px-2 text-[11px] font-bold sm:px-2.5",
+              picked === "all" ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
+            )}
+          >
+            전체
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatCard label="응시" value={`${stats.taken}명`} hint={`명단 ${stats.roster}명`} />
-        <StatCard label="미제출" value={`${stats.missing}명`} />
-        <StatCard label="회차" value={`${stats.sessions}개`} />
-        <StatCard label="평균" value={formatScore(stats.average)} />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatChip label="응시" value={`${stats.taken}`} hint={`/${stats.roster}`} />
+        <StatChip label="미제출" value={`${stats.missing}`} />
+        <StatChip label="회차" value={`${stats.sessions}`} />
+        <StatChip label="평균" value={formatScore(stats.average)} />
+        {sessionStats.map((item) => (
+          <StatChip
+            key={item.id}
+            label={item.label}
+            value={formatScore(item.average)}
+            hint={` · ${item.submitted}명`}
+          />
+        ))}
       </div>
 
       {view === "status" ? (
         <StatusView
-          sessionStats={sessionStats}
           students={students}
           sessionIds={sessionIds}
           showClass={showClass}
+          onDeleted={(student) => {
+            setCleared((current) => new Set(current).add(reportStudentKey(student)));
+          }}
+          onReload={onReload}
         />
       ) : (
         <MissView
@@ -299,53 +326,47 @@ export function ScoreReportBoard({ report }: { report: ScoreReport }) {
   );
 }
 
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function StatChip({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] px-3 py-3 sm:px-4">
-      <p className="text-[10px] font-extrabold tracking-[0.16em] text-[#808080]">{label}</p>
-      <p className="mt-1 text-2xl font-black tabular-nums">{value}</p>
-      {hint ? <p className="text-xs text-[#666]">{hint}</p> : null}
+    <div className="inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-white/8 bg-[#1f1f1f] px-2 sm:px-2.5">
+      <span className="text-[10px] font-extrabold tracking-[0.08em] text-[#808080]">{label}</span>
+      <span className="text-[13px] font-black tabular-nums text-white">
+        {value}
+        {hint ? <span className="ml-0.5 text-[11px] font-bold text-[#777]">{hint}</span> : null}
+      </span>
     </div>
   );
 }
 
 function StatusView({
-  sessionStats,
   students,
   sessionIds,
   showClass,
+  onDeleted,
+  onReload,
 }: {
-  sessionStats: { id: string; label: string; submitted: number; average: number | null }[];
   students: ReportStudent[];
   sessionIds: string[];
   showClass: boolean;
+  onDeleted: (student: ReportStudent) => void;
+  onReload?: () => void | Promise<void>;
 }) {
   return (
-    <div className="space-y-4">
-      {sessionStats.length > 0 ? (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {sessionStats.map((item) => (
-            <div key={item.id} className="rounded-[4px] border border-white/8 bg-[#1f1f1f] px-3 py-2.5">
-              <p className="truncate text-[11px] font-bold text-[#b3b3b3]">{item.label}</p>
-              <p className="mt-1 text-lg font-black tabular-nums">{formatScore(item.average)}</p>
-              <p className="text-[11px] text-[#666]">제출 {item.submitted}명</p>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
+    <div>
       <div>
-        <div className="mb-2 flex items-end justify-between gap-3">
-          <h3 className="text-sm font-bold">제출 현황</h3>
-          <p className="text-[11px] text-[#666]">제출 · 부분 · 미제출 · 채점 전</p>
+        <div className="mb-1.5 flex items-center justify-between gap-3">
+          <h3 className="text-[13px] font-bold">제출 현황</h3>
+          <p className="text-[10px] text-[#666]">휴지통으로 지울 수 있습니다</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {students.map((student) => (
             <StudentStatusCard
               key={`${student.grade}-${student.classNumber}-${student.studentNumber}`}
               student={student}
               sessionIds={sessionIds}
               showClass={showClass}
+              onDeleted={onDeleted}
+              onReload={onReload}
             />
           ))}
         </div>
@@ -358,11 +379,18 @@ function StudentStatusCard({
   student,
   sessionIds,
   showClass,
+  onDeleted,
+  onReload,
 }: {
   student: ReportStudent;
   sessionIds: string[];
   showClass: boolean;
+  onDeleted: (student: ReportStudent) => void;
+  onReload?: () => void | Promise<void>;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const cells = sessionIds.map((id) => student.bySession[id]);
   const submitted = cells.filter((cell) => cell?.submitted).length;
   const graded = cells.filter((cell) => cell?.submitted && cell.score != null).length;
@@ -370,22 +398,75 @@ function StudentStatusCard({
   const band = cells.find((cell) => cell?.band)?.band ?? null;
   const status =
     submitted === 0 ? "missing" : submitted < sessionIds.length ? "partial" : graded < submitted ? "pending" : "done";
+  const canDelete = submitted > 0 && sessionIds.length > 0;
+
+  async function remove() {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteStudentSubmissions({
+        grade: student.grade,
+        classNumber: student.classNumber,
+        studentNumber: student.studentNumber,
+        sessionIds,
+      });
+      onDeleted(student);
+      setConfirming(false);
+      await onReload?.();
+    } catch {
+      setError("삭제하지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <article
       className={cn(
-        "rounded-[6px] border px-3 py-2.5",
+        "relative rounded-[5px] border px-2 py-1.5 sm:px-2.5 sm:py-2",
         status === "missing" && "border-white/8 bg-[#171717] text-[#7a7a7a]",
         status === "partial" && "border-[#c4a574]/35 bg-[#1a1712]",
         status === "pending" && "border-white/12 bg-[#1f1f1f]",
         status === "done" && "border-white/10 bg-[#1f1f1f]",
       )}
     >
+      {confirming ? (
+        <div className="space-y-2">
+          <p className="text-[13px] font-bold leading-5 text-white">
+            {studentName(student, showClass)} 제출을 지울까요?
+          </p>
+          <p className="text-[11px] leading-4 text-[#9a9a9a]">지금 보고 있는 회차 기록이 사라집니다.</p>
+          {error ? <p className="text-[11px] font-bold text-[#ff8a90]">{error}</p> : null}
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setConfirming(false);
+                setError("");
+              }}
+              className="h-9 rounded-[4px] bg-white/8 text-[12px] font-bold text-[#d0d0d0]"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void remove()}
+              className="h-9 rounded-[4px] bg-[#e50914] text-[12px] font-bold text-white disabled:opacity-60"
+            >
+              {busy ? "지우는 중" : "삭제"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="flex items-start justify-between gap-2">
         <p className="truncate text-sm font-bold text-white">{studentName(student, showClass)}</p>
+        <div className="flex shrink-0 items-center gap-1">
         <span
           className={cn(
-            "shrink-0 rounded-[3px] px-1.5 py-0.5 text-[10px] font-extrabold",
+            "rounded-[3px] px-1.5 py-0.5 text-[10px] font-extrabold",
             status === "done" && "bg-[#e50914] text-white",
             status === "partial" && "bg-[#c4a574]/20 text-[#e8c48a]",
             status === "pending" && "bg-white/10 text-[#d0d0d0]",
@@ -394,9 +475,20 @@ function StudentStatusCard({
         >
           {status === "done" ? "제출" : status === "partial" ? "부분" : status === "pending" ? "채점 전" : "미제출"}
         </span>
+        {canDelete ? (
+          <button
+            type="button"
+            aria-label={`${studentName(student, showClass)} 제출 삭제`}
+            onClick={() => setConfirming(true)}
+            className="grid h-8 w-8 place-items-center rounded-[4px] text-[#8a8a8a] hover:bg-[#e50914]/15 hover:text-[#ff8a90]"
+          >
+            <TrashIcon />
+          </button>
+        ) : null}
+        </div>
       </div>
-      <div className="mt-2 flex items-end justify-between gap-2">
-        <p className="text-xl font-black tabular-nums text-white">{formatScore(mean)}</p>
+      <div className="mt-1.5 flex items-end justify-between gap-2">
+        <p className="text-lg font-black tabular-nums text-white sm:text-xl">{formatScore(mean)}</p>
         {band ? (
           <p className="text-[11px] font-bold" style={{ color: GRADE_TONES[band - 1] }}>
             {bandLabel(band)}
@@ -428,7 +520,27 @@ function StudentStatusCard({
           })}
         </div>
       ) : null}
+        </>
+      )}
     </article>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 fill-none stroke-current"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M5 7.5h14" />
+      <path d="M9.2 7.5V5.8A1.3 1.3 0 0 1 10.5 4.5h3A1.3 1.3 0 0 1 14.8 5.8V7.5" />
+      <path d="M16.6 7.5v10.2a1.4 1.4 0 0 1-1.4 1.4H8.8a1.4 1.4 0 0 1-1.4-1.4V7.5" />
+      <path d="M10.2 11v5.2M13.8 11v5.2" />
+    </svg>
   );
 }
 

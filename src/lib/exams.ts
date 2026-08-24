@@ -128,10 +128,10 @@ export function examViewerUrls(session: ExamSession) {
   const drive = driveExamUrls(session);
   const hasLocal = LOCAL_EXAM_IDS.has(session.id);
   return {
-    paper: hasLocal ? local.paper : drive.paper,
-    solution: hasLocal ? local.solution : drive.solution,
-    paperOpen: hasLocal ? local.paper : drive.paperOpen,
-    solutionOpen: hasLocal ? local.solution : drive.solutionOpen,
+    paper: drive.paper ?? (hasLocal ? local.paper : null),
+    solution: drive.solution ?? (hasLocal ? local.solution : null),
+    paperOpen: drive.paperOpen ?? (hasLocal ? local.paper : null),
+    solutionOpen: drive.solutionOpen ?? (hasLocal ? local.solution : null),
     paperLocal: hasLocal ? local.paper : null,
     paperDrive: drive.paper,
     solutionDrive: drive.solution,
@@ -186,7 +186,9 @@ const DRIVE_FILE_LIST = [
 ] as const;
 
 function driveFileUrl(fileId: string, mode: "preview" | "view") {
-  return `https://drive.google.com/file/d/${fileId}/${mode}`;
+  return mode === "preview"
+    ? `https://drive.google.com/file/d/${fileId}/preview`
+    : `https://drive.google.com/file/d/${fileId}/view`;
 }
 
 function sessionIdFromDriveName(name: string) {
@@ -219,4 +221,61 @@ export function driveExamUrls(session: ExamSession) {
     paperOpen: files.paper ? driveFileUrl(files.paper, "view") : null,
     solutionOpen: files.solution ? driveFileUrl(files.solution, "view") : null,
   };
+}
+
+export function nearbyExamSessions(session: ExamSession) {
+  const index = EXAM_SESSIONS.findIndex((item) => item.id === session.id);
+  const picked = new Map<string, ExamSession>();
+  const add = (item?: ExamSession | null) => {
+    if (!item || picked.has(item.id)) return;
+    picked.set(item.id, item);
+  };
+  add(session);
+  add(siblingSession(session));
+  if (index >= 0) {
+    add(EXAM_SESSIONS[index - 1]);
+    add(EXAM_SESSIONS[index + 1]);
+    add(EXAM_SESSIONS[index + 2]);
+  }
+  return [...picked.values()];
+}
+
+export function examWarmUrls(session: ExamSession) {
+  return nearbyExamSessions(session).flatMap((item) => {
+    const files = examViewerUrls(item);
+    return [files.paper, files.solution].filter((href): href is string => Boolean(href));
+  });
+}
+
+const warmedExams = new Set<string>();
+
+export function warmExamSession(session: ExamSession) {
+  if (typeof document === "undefined" || warmedExams.has(session.id)) return;
+  warmedExams.add(session.id);
+  const files = examViewerUrls(session);
+  for (const href of [files.paper, files.solution]) {
+    if (!href) continue;
+    const link = document.createElement("link");
+    link.rel = "prefetch";
+    link.href = href;
+    document.head.appendChild(link);
+  }
+}
+
+export function warmExamCatalog(start?: ExamSession) {
+  if (typeof window === "undefined") return;
+  const queue = start
+    ? [...nearbyExamSessions(start), ...EXAM_SESSIONS.filter((item) => item.id !== start.id)]
+    : [...EXAM_SESSIONS];
+  let index = 0;
+  const tick = () => {
+    const next = queue[index];
+    index += 1;
+    if (!next) return;
+    warmExamSession(next);
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    if (idle) idle(tick);
+    else window.setTimeout(tick, 180);
+  };
+  tick();
 }

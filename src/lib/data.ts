@@ -637,3 +637,56 @@ export async function listStudentPapers(): Promise<{
     solo: solo.map((row) => ({ ...row, source: "solo" as const })),
   };
 }
+
+export async function deleteStudentSubmissions(input: {
+  grade: number;
+  classNumber: number;
+  studentNumber: number;
+  sessionIds: string[];
+}) {
+  const sessionIds = [...new Set(input.sessionIds.filter(Boolean))];
+  if (sessionIds.length === 0) return;
+
+  const matchPaper = (row: SoloArchive) =>
+    row.grade === input.grade &&
+    row.class_number === input.classNumber &&
+    row.student_number === input.studentNumber &&
+    sessionIds.includes(row.session_id);
+
+  writeLocalVault(readLocalVault().filter((row) => !matchPaper(row)));
+  writeClassVault(readClassVault().filter((row) => !matchPaper(row)));
+
+  const user = await currentUser();
+  if (!user) throw new Error("로그인이 필요합니다.");
+
+  const supabase = createClient();
+  const { data: codes } = await supabase
+    .from("omr_codes")
+    .select("id")
+    .eq("teacher_id", user.id)
+    .eq("grade", input.grade)
+    .eq("class_number", input.classNumber)
+    .in("session_id", sessionIds);
+
+  if (codes && codes.length > 0) {
+    const { error } = await supabase
+      .from("submissions")
+      .delete()
+      .in(
+        "omr_code_id",
+        codes.map((code) => code.id),
+      )
+      .eq("student_number", input.studentNumber);
+    if (error) throw new Error("제출 기록을 삭제하지 못했습니다.");
+  }
+
+  const { error } = await supabase
+    .from("solo_archives")
+    .delete()
+    .eq("teacher_id", user.id)
+    .eq("grade", input.grade)
+    .eq("class_number", input.classNumber)
+    .eq("student_number", input.studentNumber)
+    .in("session_id", sessionIds);
+  if (error) throw new Error("학습 기록을 삭제하지 못했습니다.");
+}

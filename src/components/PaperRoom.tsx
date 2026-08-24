@@ -2,14 +2,17 @@
 
 import { PaperSplit } from "@/components/PaperSplit";
 import { getExamAssets, getSignedAssetUrl } from "@/lib/data";
-import type { ExamSession } from "@/lib/exams";
-import { useEffect, useState } from "react";
+import { examViewerUrls, type ExamSession } from "@/lib/exams";
+import { useEffect, useMemo, useState } from "react";
 
 export function PaperRoom({ session }: { session: ExamSession }) {
-  const [paperUrl, setPaperUrl] = useState<string | null>(null);
-  const [solutionUrl, setSolutionUrl] = useState<string | null>(null);
+  const files = useMemo(() => examViewerUrls(session), [session]);
+  const [paperUrl, setPaperUrl] = useState<string | null>(files.paper);
+  const [solutionUrl, setSolutionUrl] = useState<string | null>(files.solution);
 
   useEffect(() => {
+    setPaperUrl(files.paper);
+    setSolutionUrl(files.solution);
     let cancelled = false;
     getExamAssets(session.id)
       .then(async (assets) => {
@@ -17,18 +20,19 @@ export function PaperRoom({ session }: { session: ExamSession }) {
           getSignedAssetUrl(assets?.paper_path ?? null),
           getSignedAssetUrl(assets?.solution_path ?? null),
         ]);
-        if (!cancelled) {
-          setPaperUrl(paper);
-          setSolutionUrl(solution);
-        }
+        if (cancelled) return;
+        if (paper) setPaperUrl(paper);
+        if (solution) setSolutionUrl(solution);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [session.id]);
+  }, [files.paper, files.solution, session.id]);
 
   return (
-    <PaperSplit session={session} paperUrl={paperUrl} solutionUrl={solutionUrl} />
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <PaperSplit session={session} paperUrl={paperUrl} solutionUrl={solutionUrl} />
+    </div>
   );
 }

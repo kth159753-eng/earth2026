@@ -48,9 +48,13 @@ export function TeacherGate({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   useEffect(() => {
-    if (!profile || profile.role !== "student") return;
-    if (pathname.startsWith("/exam") || pathname.startsWith("/admin")) {
+    if (!profile) return;
+    if (profile.role === "student" && (pathname.startsWith("/exam") || pathname.startsWith("/admin"))) {
       router.replace("/solo/");
+      return;
+    }
+    if (profile.role === "teacher" && pathname.startsWith("/vault")) {
+      router.replace("/exam/");
     }
   }, [pathname, profile, router]);
 
@@ -63,6 +67,10 @@ export function TeacherGate({ children }: { children: React.ReactNode }) {
   }
 
   if (profile.role === "student" && (pathname.startsWith("/exam") || pathname.startsWith("/admin"))) {
+    return <div className="min-h-dvh bg-void" />;
+  }
+
+  if (profile.role === "teacher" && pathname.startsWith("/vault")) {
     return <div className="min-h-dvh bg-void" />;
   }
 

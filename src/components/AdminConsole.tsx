@@ -5,7 +5,7 @@ import { CHOICE_COUNT, QUESTION_COUNT, defaultPoints, emptyAnswers } from "@/lib
 import { GRADE_TONES, bandFromScore, bandLabel, countBands, normalizeCuts } from "@/lib/grades";
 import { ScoreReportBoard } from "@/components/ScoreReport";
 import type { ClassConfig, ClassSummary, GradedRow, ScoreReport } from "@/lib/types";
-import { Button, Notice, SectionTitle } from "@/components/ui";
+import { Button, HeaderIconWell, Notice, SectionTitle, headerChipClass } from "@/components/ui";
 import {
   classLabel,
   cn,
@@ -14,7 +14,7 @@ import {
   gradeLabel,
   studentLabel,
 } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 type Tab = "report" | "classes" | "omr" | "answers" | "compare";
 
@@ -48,77 +48,141 @@ export function AdminConsole({
   onReload?: () => void | Promise<void>;
 }) {
   const [tab, setTab] = useState<Tab>("report");
+  const [visited, setVisited] = useState<Tab[]>(["report"]);
+
+  function openTab(next: Tab) {
+    setTab(next);
+    setVisited((current) => (current.includes(next) ? current : [...current, next]));
+  }
 
   return (
-    <div className="relative z-0 mx-auto w-full max-w-7xl px-3 py-3 sm:px-5 sm:py-5">
-      <h1 className="max-w-full truncate text-[22px] font-bold leading-tight tracking-[-0.03em] sm:text-[28px] md:text-[32px]">
+    <div className="relative z-0 mx-auto w-full max-w-7xl px-3 py-2 sm:px-5 sm:py-3">
+      <h1 className="truncate text-center text-[20px] font-bold leading-none tracking-[-0.03em] sm:text-[24px] md:text-[28px]">
         {sessionLabel}
       </h1>
-      <p className="mt-1.5 text-sm leading-5 text-stone-400 sm:mt-2 sm:leading-6">
-        회차별 성적 보고서, 채점, 학급 설정, 정답·배점을 한 화면에서 관리합니다.
-      </p>
 
-      <div className="-mx-3 mt-4 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-5 sm:flex-wrap sm:overflow-visible sm:px-0">
-        {(
-          [
-            ["report", "보고서", "관리자 페이지"],
-            ["omr", "채점", "채점하기"],
-            ["compare", "비교", "학년 · 학급 비교"],
-            ["classes", "학급", "학년 · 학급 설정"],
-            ["answers", "정답", "정답 · 배점"],
-          ] as const
-        ).map(([id, short, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={cn(
-              "h-10 shrink-0 rounded-[4px] px-3 text-[13px] sm:min-h-11 sm:px-4 sm:text-sm",
-              tab === id ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
-            )}
-          >
-            <span className="sm:hidden">{short}</span>
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:mt-2.5">
+        <button
+          type="button"
+          onClick={() => openTab("report")}
+          className={cn(
+            headerChipClass(tab === "report"),
+            "overflow-hidden px-2 sm:px-2.5",
+            tab === "report"
+              ? "border border-[#e50914]/45 bg-[#e50914]/12 text-white shadow-[0_0_18px_rgba(229,9,20,0.28)]"
+              : "border border-white/10 bg-black/35 hover:border-white/18 hover:bg-white/[0.06]",
+          )}
+        >
+          <HeaderIconWell active={tab === "report"}>
+            <AdminTabIcon id="report" />
+          </HeaderIconWell>
+          <span className="hidden leading-none sm:flex sm:flex-col">
+            <span
+              className={cn(
+                "text-[8px] font-extrabold tracking-[0.18em]",
+                tab === "report" ? "text-[#ff8a90]" : "text-[#7d7d7d]",
+              )}
+            >
+              관리
+            </span>
+            <span className="mt-0.5 text-[13px] font-bold">관리자 페이지</span>
+          </span>
+          <span className="text-[12px] font-bold sm:hidden">관리자</span>
+          {tab === "report" ? (
+            <span className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#e50914] to-transparent" />
+          ) : null}
+        </button>
+
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-[8px] border border-white/[0.08] bg-black/40 p-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+          {(
+            [
+              ["omr", "채점", "채점하기", "채점"],
+              ["compare", "비교", "학급비교", "비교"],
+              ["classes", "설정", "학급설정", "학급"],
+              ["answers", "정답", "정답·배점", "정답"],
+            ] as const
+          ).map(([id, kicker, label, short]) => {
+            const active = tab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => openTab(id)}
+                className={cn(
+                  headerChipClass(active),
+                  "flex-1 justify-center md:flex-none",
+                  active && "bg-white/[0.08]",
+                )}
+              >
+                <HeaderIconWell active={active}>
+                  <AdminTabIcon id={id} />
+                </HeaderIconWell>
+                <span className="hidden leading-none md:flex md:flex-col">
+                  <span
+                    className={cn(
+                      "text-[8px] font-extrabold tracking-[0.18em]",
+                      active ? "text-[#e50914]" : "text-[#7d7d7d]",
+                    )}
+                  >
+                    {kicker}
+                  </span>
+                  <span className="mt-0.5 text-[13px] font-bold">{label}</span>
+                </span>
+                <span className="text-[12px] font-bold md:hidden">{short}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="mt-6">
-        {tab === "report" ? <ScoreReportBoard report={report} /> : null}
-        {tab === "classes" ? (
-          <ClassSettings initial={classConfigs} onReload={onReload} />
+      <div className="mt-2 sm:mt-2.5">
+        {visited.includes("report") ? (
+          <div hidden={tab !== "report"}>
+            <ScoreReportBoard report={report} onReload={onReload} />
+          </div>
         ) : null}
-        {tab === "answers" ? (
-          <AnswerEditor
-            key={`${sessionId}-answers`}
-            sessionId={sessionId}
-            initialAnswers={initialAnswers}
-            initialPoints={initialPoints}
-            initialCuts={initialCuts}
-            onReload={onReload}
-          />
+        {visited.includes("classes") ? (
+          <div hidden={tab !== "classes"}>
+            <ClassSettings initial={classConfigs} onReload={onReload} />
+          </div>
         ) : null}
-        {tab === "omr" ? (
-          <OmrBoard
-            key={`${sessionId}-omr`}
-            sessionId={sessionId}
-            dashboard={dashboard}
-            cuts={normalizeCuts(
-              initialCuts,
-              initialPoints.length ? initialPoints.reduce((sum, value) => sum + value, 0) : 50,
-            )}
-            onReload={onReload}
-          />
+        {visited.includes("answers") ? (
+          <div hidden={tab !== "answers"}>
+            <AnswerEditor
+              key={`${sessionId}-answers`}
+              sessionId={sessionId}
+              initialAnswers={initialAnswers}
+              initialPoints={initialPoints}
+              initialCuts={initialCuts}
+              onReload={onReload}
+            />
+          </div>
         ) : null}
-        {tab === "compare" ? (
-          <CompareBoard
-            key={`${sessionId}-compare`}
-            dashboard={dashboard}
-            cuts={normalizeCuts(
-              initialCuts,
-              initialPoints.length ? initialPoints.reduce((sum, value) => sum + value, 0) : 50,
-            )}
-          />
+        {visited.includes("omr") ? (
+          <div hidden={tab !== "omr"}>
+            <OmrBoard
+              key={`${sessionId}-omr`}
+              sessionId={sessionId}
+              dashboard={dashboard}
+              cuts={normalizeCuts(
+                initialCuts,
+                initialPoints.length ? initialPoints.reduce((sum, value) => sum + value, 0) : 50,
+              )}
+              onReload={onReload}
+            />
+          </div>
+        ) : null}
+        {visited.includes("compare") ? (
+          <div hidden={tab !== "compare"}>
+            <CompareBoard
+              key={`${sessionId}-compare`}
+              dashboard={dashboard}
+              cuts={normalizeCuts(
+                initialCuts,
+                initialPoints.length ? initialPoints.reduce((sum, value) => sum + value, 0) : 50,
+              )}
+            />
+          </div>
         ) : null}
       </div>
     </div>
@@ -618,50 +682,56 @@ function OmrBoard({
   }
 
   return (
-    <section className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {dashboard.map((item) => (
-            <button
-              key={keyOf(item)}
-              type="button"
-              onClick={() => {
-                setSelected(keyOf(item));
-                setScope("class");
-              }}
-              className={cn(
-                "rounded-[4px] px-3 py-1.5 text-sm",
-                current && keyOf(item) === keyOf(current) && scope === "class"
-                  ? "bg-[#e50914] text-white"
-                  : "bg-white/5 text-stone-300",
-              )}
-            >
-              {gradeLabel(item.grade)} {classLabel(item.classNumber)}
-              <span className="ml-2 text-xs opacity-70">
-                {item.summary.submitted}/{item.summary.roster}
-              </span>
-            </button>
-          ))}
+    <section className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {dashboard.map((item) => (
           <button
+            key={keyOf(item)}
             type="button"
-            onClick={() => setScope("all")}
+            onClick={() => {
+              setSelected(keyOf(item));
+              setScope("class");
+            }}
             className={cn(
-              "rounded-[4px] px-3 py-1.5 text-sm",
-              scope === "all" ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
+              "h-8 rounded-[4px] px-2.5 text-[12px] font-bold",
+              current && keyOf(item) === keyOf(current) && scope === "class"
+                ? "bg-[#e50914] text-white"
+                : "bg-white/5 text-stone-300",
             )}
           >
-            전체
+            {gradeLabel(item.grade)} {classLabel(item.classNumber)}
+            <span className="ml-1 text-[10px] font-semibold opacity-70">
+              {item.summary.submitted}/{item.summary.roster}
+            </span>
           </button>
-        </div>
-        <Button className="w-full sm:w-auto" onClick={() => void grade()} disabled={pending}>
+        ))}
+        <button
+          type="button"
+          onClick={() => setScope("all")}
+          className={cn(
+            "h-8 rounded-[4px] px-2.5 text-[12px] font-bold",
+            scope === "all" ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
+          )}
+        >
+          전체
+        </button>
+        <button
+          type="button"
+          onClick={() => void grade()}
+          disabled={pending}
+          className="ml-auto h-8 rounded-[4px] bg-[#e50914] px-3 text-[12px] font-bold text-white disabled:opacity-60"
+        >
           {pending ? "채점 중..." : "채점"}
-        </Button>
+        </button>
       </div>
       {error ? <Notice tone="warn">{error}</Notice> : null}
       {message ? <Notice tone="ok">{message}</Notice> : null}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="제출" value={`${scope === "all" ? dashboard.reduce((sum, item) => sum + item.summary.submitted, 0) : current?.summary.submitted ?? 0}명`} />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Stat
+          label="제출"
+          value={`${scope === "all" ? dashboard.reduce((sum, item) => sum + item.summary.submitted, 0) : current?.summary.submitted ?? 0}명`}
+        />
         <Stat
           label="평균"
           value={formatScore(
@@ -670,7 +740,10 @@ function OmrBoard({
               : current?.summary.average ?? null,
           )}
         />
-        <Stat label="채점 완료" value={`${scope === "all" ? dashboard.reduce((sum, item) => sum + item.summary.graded, 0) : current?.summary.graded ?? 0}명`} />
+        <Stat
+          label="채점 완료"
+          value={`${scope === "all" ? dashboard.reduce((sum, item) => sum + item.summary.graded, 0) : current?.summary.graded ?? 0}명`}
+        />
       </div>
 
       <GradeChart
@@ -683,25 +756,25 @@ function OmrBoard({
         cuts={cuts}
       />
 
-      <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4">
-        <p className="mb-3 text-sm text-stone-400">문항별 오답률</p>
-        <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+      <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] px-2.5 py-2">
+        <p className="mb-1.5 text-[12px] text-stone-400">문항별 오답률</p>
+        <div className="grid grid-cols-10 gap-1">
           {heatmap.map((item) => (
             <div
               key={item.question}
-              className="rounded-[4px] p-2 text-center"
+              className="rounded-[4px] px-0.5 py-1 text-center"
               style={{ background: `rgba(196, 92, 74, ${0.08 + item.rate / 140})` }}
             >
-              <p className="text-xs text-stone-400">{item.question}</p>
-              <p className="text-sm font-semibold">{formatPercent(item.rate)}</p>
+              <p className="text-[10px] text-stone-400">{item.question}</p>
+              <p className="text-[11px] font-semibold leading-none">{formatPercent(item.rate)}</p>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-3 sm:p-4">
-        <p className="mb-3 text-sm text-stone-400">학생 현황</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+      <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-2 sm:p-2.5">
+        <p className="mb-1.5 text-[12px] text-stone-400">학생 현황</p>
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
           {(current?.rows ?? []).map((row) => {
             const band = bandFromScore(row.score, cuts);
             const graded = row.submitted && row.score !== null;
@@ -709,7 +782,7 @@ function OmrBoard({
               <article
                 key={row.studentNumber}
                 className={cn(
-                  "rounded-[4px] border px-2.5 py-2.5",
+                  "rounded-[4px] border px-2 py-1.5",
                   row.submitted
                     ? "border-white/12 bg-white/[0.05]"
                     : "border-white/[0.06] bg-black/25",
@@ -746,7 +819,7 @@ function OmrBoard({
                     <span className="text-[10px] text-[#555]">—</span>
                   )}
                 </div>
-                <div className="mt-2 min-h-5">
+                <div className="mt-1 min-h-4">
                   {row.wrongQuestions.length > 0 ? (
                     <div className="flex flex-wrap gap-0.5">
                       {row.wrongQuestions.map((question) => (
@@ -913,28 +986,28 @@ function GradeChart({
   const max = Math.max(...counts, 1);
 
   return (
-    <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4">
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <p className="text-sm text-stone-400">{title}</p>
-        <p className="text-xs text-stone-500">채점 {graded}명</p>
+    <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] px-2.5 py-2">
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <p className="text-[12px] text-stone-400">{title}</p>
+        <p className="text-[10px] text-stone-500">채점 {graded}명</p>
       </div>
-      <StackedBands counts={counts} className="mb-4 h-3" />
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-9">
+      <StackedBands counts={counts} className="mb-1.5 h-1.5" />
+      <div className="grid grid-cols-9 gap-1">
         {counts.map((count, index) => {
           const percent = graded ? (count / graded) * 100 : 0;
           return (
-            <div key={index} className="rounded-[4px] bg-black/30 p-2">
-              <p className="text-center text-[11px] font-bold" style={{ color: GRADE_TONES[index] }}>
-                {index + 1}등급
+            <div key={index} className="rounded-[4px] bg-black/30 px-0.5 py-1 text-center">
+              <p className="text-[10px] font-bold leading-none" style={{ color: GRADE_TONES[index] }}>
+                {index + 1}
+                <span className="hidden sm:inline">등급</span>
               </p>
-              <p className="mt-1 text-center text-xl font-bold text-white">{count}</p>
-              <p className="text-center text-[11px] text-stone-500">{percent.toFixed(0)}%</p>
-              <div className="mt-2 flex h-16 items-end">
+              <p className="mt-0.5 text-[13px] font-black leading-none tabular-nums text-white">{count}</p>
+              <p className="mt-0.5 text-[10px] leading-none text-stone-500">{percent.toFixed(0)}%</p>
+              <div className="mx-auto mt-1 h-1 w-full overflow-hidden rounded-full bg-white/8">
                 <div
-                  className="w-full rounded-sm"
+                  className="h-full rounded-full"
                   style={{
-                    height: `${(count / max) * 100}%`,
-                    minHeight: count ? 4 : 0,
+                    width: `${(count / max) * 100}%`,
                     background: GRADE_TONES[index],
                   }}
                 />
@@ -972,13 +1045,76 @@ function averageOf(scores: Array<number | null>) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[4px] border border-white/8 bg-[#1f1f1f] px-4 py-4">
-      <p className="text-xs text-stone-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-stone-100">{value}</p>
+    <div className="inline-flex h-8 items-center gap-1.5 rounded-[4px] border border-white/8 bg-[#1f1f1f] px-2.5">
+      <span className="text-[10px] font-extrabold tracking-[0.08em] text-[#808080]">{label}</span>
+      <span className="text-[13px] font-black tabular-nums text-stone-100">{value}</span>
     </div>
   );
 }
 
 function keyOf(item: { grade: number; classNumber: number }) {
   return `${item.grade}-${item.classNumber}`;
+}
+
+function AdminIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 shrink-0 fill-none stroke-current"
+      strokeWidth="1.85"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+function AdminTabIcon({ id }: { id: string }) {
+  if (id === "report") {
+    return (
+      <AdminIcon>
+        <rect x="4.2" y="4.4" width="6.4" height="6.4" rx="1.4" />
+        <rect x="13.4" y="4.4" width="6.4" height="6.4" rx="1.4" />
+        <rect x="4.2" y="13.2" width="6.4" height="6.4" rx="1.4" />
+        <rect x="13.4" y="13.2" width="6.4" height="6.4" rx="1.4" />
+      </AdminIcon>
+    );
+  }
+  if (id === "omr") {
+    return (
+      <AdminIcon>
+        <circle cx="12" cy="12" r="7.2" />
+        <path d="M8.4 12.2 10.8 14.7 15.7 9.4" />
+      </AdminIcon>
+    );
+  }
+  if (id === "compare") {
+    return (
+      <AdminIcon>
+        <path d="M6 17.4V11.2" />
+        <path d="M12 17.4V7.2" />
+        <path d="M18 17.4v-4.6" />
+        <path d="M4.6 17.6h14.8" />
+      </AdminIcon>
+    );
+  }
+  if (id === "classes") {
+    return (
+      <AdminIcon>
+        <circle cx="9" cy="8.6" r="2.3" />
+        <circle cx="15.2" cy="8.6" r="2.3" />
+        <path d="M5.4 17.8c.6-2.5 2-3.7 3.6-3.7s3 1.2 3.6 3.7" />
+        <path d="M11.4 17.8c.6-2.5 2-3.7 3.8-3.7s3.2 1.2 3.8 3.7" />
+      </AdminIcon>
+    );
+  }
+  return (
+    <AdminIcon>
+      <path d="M8.2 6.4h9.2v13H8.2z" />
+      <path d="M10.4 9.4h4.8M10.4 12.4h4.8M10.4 15.4h3.2" />
+      <path d="M6.6 8.2v9.6" />
+    </AdminIcon>
+  );
 }

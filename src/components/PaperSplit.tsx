@@ -1,7 +1,7 @@
 "use client";
 
 import { saveExamAsset } from "@/lib/actions/teacher";
-import { examViewerUrls, type ExamSession } from "@/lib/exams";
+import { examViewerUrls, nearbyExamSessions, warmExamSession, type ExamSession } from "@/lib/exams";
 import { useProfile } from "@/lib/profile-context";
 import { createClient } from "@/lib/supabase/client";
 import { Notice } from "@/components/ui";
@@ -20,19 +20,9 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
   const files = useMemo(() => examViewerUrls(session), [session]);
 
   useEffect(() => {
-    if (!window.matchMedia("(min-width: 1024px)").matches) return;
-    const hrefs = [files.paper, files.solution].filter(Boolean) as string[];
-    const nodes = hrefs.map((href) => {
-      const link = document.createElement("link");
-      link.rel = "prefetch";
-      link.href = href;
-      document.head.appendChild(link);
-      return link;
-    });
-    return () => {
-      nodes.forEach((node) => node.remove());
-    };
-  }, [files.paper, files.solution]);
+    warmExamSession(session);
+    for (const item of nearbyExamSessions(session)) warmExamSession(item);
+  }, [files.paper, files.solution, session]);
   const [paper, setPaper] = useState(paperUrl);
   const [solution, setSolution] = useState(solutionUrl);
   const [pane, setPane] = useState<"paper" | "solution">("paper");
@@ -45,25 +35,17 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
   }, [paperUrl, solutionUrl, session.id]);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 py-4 sm:px-5 sm:py-5">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[28px] font-bold leading-tight tracking-[-0.03em] sm:text-[36px] lg:text-[40px]">
-            {session.label}
-          </h1>
-          <p className="mt-2 text-sm text-[#d0d0d0] sm:text-base">{session.subjectName}</p>
-        </div>
-      </div>
-      {error ? <div className="mb-4"><Notice tone="warn">{error}</Notice></div> : null}
-      {message ? <div className="mb-4"><Notice tone="ok">{message}</Notice></div> : null}
-      <div className="mb-3 grid grid-cols-2 gap-2 lg:hidden">
+    <div className="flex h-full min-h-0 flex-1 flex-col px-2 py-2 sm:px-3">
+      {error ? <div className="mb-2"><Notice tone="warn">{error}</Notice></div> : null}
+      {message ? <div className="mb-2"><Notice tone="ok">{message}</Notice></div> : null}
+      <div className="mb-2 grid grid-cols-2 gap-1.5 lg:hidden">
         {(["paper", "solution"] as const).map((id) => (
           <button
             key={id}
             type="button"
             onClick={() => setPane(id)}
             className={cn(
-              "h-11 rounded-[4px] text-sm font-bold",
+              "h-9 rounded-[4px] text-[13px] font-bold",
               pane === id ? "bg-[#e50914] text-white" : "bg-white/8 text-[#b3b3b3]",
             )}
           >
@@ -71,8 +53,8 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
           </button>
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className={cn(pane === "paper" ? "block" : "hidden lg:block")}>
+      <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-2">
+        <div className={cn("min-h-0", pane === "paper" ? "block" : "hidden lg:block")}>
         <PaperPane
           title="시험지"
           readOnly={readOnly}
@@ -92,7 +74,7 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
           }}
         />
         </div>
-        <div className={cn(pane === "solution" ? "block" : "hidden lg:block")}>
+        <div className={cn("min-h-0", pane === "solution" ? "block" : "hidden lg:block")}>
         <PaperPane
           title="해설지"
           readOnly={readOnly}
@@ -183,8 +165,8 @@ function PaperPane({
   }
 
   return (
-    <section className="overflow-hidden rounded-[4px] border border-[#333] bg-[#1f1f1f]">
-      <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[4px] border border-[#333] bg-[#1f1f1f]">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 px-3 py-1.5">
         <h2 className="text-sm font-semibold tracking-wide">{title}</h2>
         <div className="flex items-center gap-2">
           {href ? (
@@ -215,24 +197,24 @@ function PaperPane({
           )}
         </div>
       </div>
-      <div className="min-h-[52dvh] bg-[#0a0d12] md:min-h-[62dvh] lg:min-h-[68vh]">
+      <div className="min-h-0 flex-1 bg-[#0a0d12]">
         {src && visible ? (
           isImageSrc(src) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt={title} loading="lazy" decoding="async" className="mx-auto max-h-[58dvh] w-full object-contain md:max-h-[70dvh] lg:max-h-[78vh]" />
+            <img src={src} alt={title} loading="lazy" decoding="async" className="mx-auto h-full w-full object-contain" />
           ) : (
             <iframe
               title={title}
               src={src}
-              loading="lazy"
-              className="h-[58dvh] w-full border-0 bg-white md:h-[70dvh] lg:h-[78vh]"
+              className="h-full w-full border-0 bg-white"
+              allow="autoplay"
               allowFullScreen
             />
           )
         ) : src && !visible ? (
-          <div className="min-h-[52dvh] md:min-h-[62dvh] lg:min-h-[68vh]" />
+          <div className="h-full" />
         ) : (
-          <div className="grid min-h-[52dvh] place-items-center px-6 text-center md:min-h-[62dvh] lg:min-h-[68vh]">
+          <div className="grid h-full place-items-center px-6 text-center">
             <p className="text-sm text-stone-400">이 회차 파일이 아직 없습니다.</p>
           </div>
         )}

@@ -125,12 +125,10 @@ export function IdentityRow({
   );
 }
 
-const selectClassName =
-  "h-8 max-w-[7.5rem] cursor-pointer appearance-none rounded-[4px] border border-[#ffd400]/30 bg-black/50 py-0 pl-1.5 pr-5 text-base font-black text-[#ffd400] outline-none sm:h-8 sm:max-w-none sm:pl-2 sm:pr-6 sm:text-[13px]";
-
 export function ActiveClassControl() {
   const [active, setActive] = useState<ActiveClass | null>(null);
   const [configs, setConfigs] = useState<ClassConfig[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => subscribeActiveClass(setActive), []);
   useEffect(() => {
@@ -182,8 +180,32 @@ export function ActiveClassControl() {
     pick(nextGrade, nextClass);
   }
 
+  useEffect(() => {
+    if (!openId) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-class-select]")) return;
+      setOpenId(null);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpenId(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openId]);
+
   return (
-    <div className={cn(headerChipClass(false, "gold"), "min-w-0 gap-1.5 px-2 sm:gap-2 sm:px-3 md:px-4")} title="학급 바꾸기">
+    <div
+      className={cn(
+        headerChipClass(false, "gold"),
+        "min-w-0 overflow-visible gap-1.5 px-2 sm:gap-2 sm:px-3 md:px-4",
+      )}
+      title="학급 바꾸기"
+    >
       <HeaderIconWell tone="gold">
         <ClassIcon />
       </HeaderIconWell>
@@ -191,6 +213,9 @@ export function ActiveClassControl() {
         id="active-class-grade"
         label="학년"
         value={grade}
+        open={openId === "grade"}
+        onToggle={() => setOpenId((current) => (current === "grade" ? null : "grade"))}
+        onClose={() => setOpenId(null)}
         onChange={changeGrade}
         options={grouped.map((row) => ({ value: row.grade, label: gradeLabel(row.grade) }))}
       />
@@ -198,6 +223,9 @@ export function ActiveClassControl() {
         id="active-class-number"
         label="반"
         value={classNumber}
+        open={openId === "class"}
+        onToggle={() => setOpenId((current) => (current === "class" ? null : "class"))}
+        onClose={() => setOpenId(null)}
         onChange={(value) => pick(grade, value)}
         options={classes.map((value) => ({ value, label: classLabel(value) }))}
       />
@@ -209,36 +237,79 @@ function ClassSelect({
   id,
   label,
   value,
+  open,
+  onToggle,
+  onClose,
   onChange,
   options,
 }: {
   id: string;
   label: string;
   value: number;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
   onChange: (value: number) => void;
   options: { value: number; label: string }[];
 }) {
+  const current = options.find((option) => option.value === value)?.label ?? "";
   return (
-    <label className="relative block">
-      <span className="sr-only">{label}</span>
-      <select
+    <div className="relative" data-class-select>
+      <button
+        type="button"
         id={id}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className={selectClassName}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={onToggle}
+        className={cn(
+          "inline-flex h-8 min-w-[4.4rem] max-w-[7.5rem] items-center justify-between gap-1 rounded-[4px] border px-2 text-[13px] font-black outline-none sm:min-w-[4.8rem] sm:max-w-none",
+          open
+            ? "border-[#ffd400] bg-[#141414] text-[#ffd400]"
+            : "border-[#ffd400]/35 bg-[#141414]/80 text-[#ffd400]",
+        )}
       >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <span className="pointer-events-none absolute inset-y-0 right-1.5 grid place-items-center text-[#ffe066]">
-        <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 fill-none stroke-current" strokeWidth="1.8" aria-hidden>
+        <span className="truncate">{current}</span>
+        <svg
+          viewBox="0 0 12 12"
+          className={cn("h-2.5 w-2.5 shrink-0 fill-none stroke-current transition-transform", open && "rotate-180")}
+          strokeWidth="1.8"
+          aria-hidden
+        >
           <path d="M2.2 4.2 6 8l3.8-3.8" />
         </svg>
-      </span>
-    </label>
+      </button>
+      {open ? (
+        <ul
+          role="listbox"
+          aria-labelledby={id}
+          className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-[min(16.5rem,70dvh)] min-w-full w-max overflow-auto rounded-[6px] border border-[#ffd400]/25 bg-[#141414] py-1 shadow-[0_12px_28px_rgba(0,0,0,0.55)]"
+        >
+          {options.map((option) => {
+            const selected = option.value === value;
+            return (
+              <li key={option.value} role="option" aria-selected={selected}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    onClose();
+                  }}
+                  className={cn(
+                    "flex min-h-11 w-full items-center px-3 text-left text-[14px] font-bold sm:min-h-10 sm:text-[13px]",
+                    selected
+                      ? "bg-[#ffd400] text-[#141414]"
+                      : "text-[#e6e6e6] hover:bg-[#ffd400]/12 hover:text-[#ffd400]",
+                  )}
+                >
+                  {option.label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

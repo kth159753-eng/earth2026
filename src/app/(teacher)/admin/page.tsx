@@ -80,12 +80,11 @@ function AdminInner() {
   }, [session.id]);
 
   useEffect(() => {
-    setReady(false);
     load().catch(() => setReady(true));
   }, [load]);
 
   if (!ready) {
-    return <div className="min-h-[50vh]" />;
+    return <div className="min-h-[20vh]" />;
   }
 
   return (
