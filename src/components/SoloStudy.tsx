@@ -1,6 +1,9 @@
 "use client";
 
+import { IdentityRow } from "@/components/ClassIdentity";
+import { OmrCardSheet } from "@/components/OmrCardSheet";
 import type { InkStroke, SoloTool } from "@/components/SoloPaper";
+import { readActiveClass, subscribeActiveClass, writeActiveClass } from "@/lib/active-class";
 import { getAnswerKey, saveSoloArchive } from "@/lib/data";
 import { BASE_PATH } from "@/lib/config";
 import {
@@ -9,10 +12,11 @@ import {
   examViewerUrls,
   type ExamSession,
 } from "@/lib/exams";
-import { classLabel, cn, formatClock, gradeLabel, studentLabel } from "@/lib/utils";
+import { cn, formatClock } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const SoloPaper = dynamic(
   () => import("@/components/SoloPaper").then((mod) => ({ default: mod.SoloPaper })),
@@ -32,6 +36,7 @@ const COLORS = [
 ] as const;
 
 const CHOICES = [1, 2, 3, 4, 5] as const;
+const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
 type Result = {
   score: number;
@@ -43,15 +48,32 @@ function storageKey(sessionId: string) {
   return `earth-solo-${sessionId}`;
 }
 
-export function SoloStudy({ session }: { session: ExamSession }) {
+export function SoloStudy({
+  session,
+  guest = false,
+  initialGrade,
+  initialClass,
+  onBack,
+}: {
+  session: ExamSession;
+  guest?: boolean;
+  initialGrade?: number;
+  initialClass?: number;
+  onBack?: () => void;
+}) {
   const router = useRouter();
   const files = useMemo(() => examViewerUrls(session), [session]);
   const paperSrc = files.paper && !files.paper.includes("drive.google.com") ? files.paper : null;
   const [tool, setTool] = useState<SoloTool>("pen");
   const [color, setColor] = useState<(typeof COLORS)[number]["value"]>(COLORS[0].value);
   const [omrOpen, setOmrOpen] = useState(false);
-  const [grade, setGrade] = useState(3);
-  const [classNumber, setClassNumber] = useState(1);
+  const [omrDesktop, setOmrDesktop] = useState(true);
+  const [wide, setWide] = useState(false);
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const paperPane = useRef<HTMLDivElement>(null);
+  const [grade, setGrade] = useState(initialGrade ?? 3);
+  const [classNumber, setClassNumber] = useState(initialClass ?? 1);
   const [studentNumber, setStudentNumber] = useState(1);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<number[]>(() => Array(QUESTION_COUNT).fill(0));
@@ -70,12 +92,42 @@ export function SoloStudy({ session }: { session: ExamSession }) {
 
   useEffect(() => {
     try {
+      const raw = localStorage.getItem("earth-omr-sidebar");
+      if (raw === "0") setOmrDesktop(false);
+      if (raw === "1") setOmrDesktop(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    setHeaderSlot(document.getElementById("earth-header-timer"));
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => setWide(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  function setOmrDesktopPersist(next: boolean) {
+    setOmrDesktop(next);
+    try {
+      localStorage.setItem("earth-omr-sidebar", next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    try {
       const raw = localStorage.getItem(storageKey(session.id));
       if (!raw) {
         setAnswers(Array(QUESTION_COUNT).fill(0));
         setStrokes([]);
         setCurrent(0);
         setResult(null);
+        if (guest && initialGrade) setGrade(initialGrade);
+        if (guest && initialClass) setClassNumber(initialClass);
         return;
       }
       const saved = JSON.parse(raw) as {
@@ -88,8 +140,10 @@ export function SoloStudy({ session }: { session: ExamSession }) {
       if (saved.answers?.length === QUESTION_COUNT) setAnswers(saved.answers);
       else setAnswers(Array(QUESTION_COUNT).fill(0));
       setStrokes(Array.isArray(saved.strokes) ? saved.strokes : []);
-      if (saved.grade) setGrade(saved.grade);
-      if (saved.classNumber) setClassNumber(saved.classNumber);
+      if (guest && initialGrade) setGrade(initialGrade);
+      else if (saved.grade) setGrade(saved.grade);
+      if (guest && initialClass) setClassNumber(initialClass);
+      else if (saved.classNumber) setClassNumber(saved.classNumber);
       if (saved.studentNumber) setStudentNumber(saved.studentNumber);
       setCurrent(0);
       setResult(null);
@@ -97,7 +151,27 @@ export function SoloStudy({ session }: { session: ExamSession }) {
       setAnswers(Array(QUESTION_COUNT).fill(0));
       setStrokes([]);
     }
-  }, [session.id]);
+  }, [guest, initialClass, initialGrade, session.id]);
+
+  useEffect(() => {
+    if (guest) return;
+    return subscribeActiveClass((next) => {
+      if (!next) return;
+      setGrade(next.grade);
+      setClassNumber(next.classNumber);
+    });
+  }, [guest]);
+
+  useEffect(() => {
+    if (guest) return;
+    const current = readActiveClass();
+    writeActiveClass({
+      grade,
+      classNumber,
+      sessionId: current?.sessionId ?? session.id,
+      running: current?.running ?? false,
+    });
+  }, [classNumber, grade, guest, session.id]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -163,16 +237,43 @@ export function SoloStudy({ session }: { session: ExamSession }) {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || event.shiftKey) {
-        return;
-      }
+      if (!(event.ctrlKey || event.metaKey)) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable=true]")) return;
-      event.preventDefault();
-      undoStroke();
+      if (event.key.toLowerCase() === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undoStroke();
+        return;
+      }
+      if (event.key === "=" || event.key === "+") {
+        event.preventDefault();
+        bumpZoom(1);
+        return;
+      }
+      if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        bumpZoom(-1);
+        return;
+      }
+      if (event.key === "0") {
+        event.preventDefault();
+        setZoom(1);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const pane = paperPane.current;
+    if (!pane) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      bumpZoom(event.deltaY < 0 ? 1 : -1);
+    };
+    pane.addEventListener("wheel", onWheel, { passive: false });
+    return () => pane.removeEventListener("wheel", onWheel);
   }, []);
 
   function applyDuration() {
@@ -234,6 +335,15 @@ export function SoloStudy({ session }: { session: ExamSession }) {
     });
   }
 
+  function bumpZoom(direction: 1 | -1) {
+    setZoom((current) => {
+      const index = ZOOM_STEPS.reduce((best, step, stepIndex) => {
+        return Math.abs(step - current) < Math.abs(ZOOM_STEPS[best] - current) ? stepIndex : best;
+      }, 0);
+      return ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, index + direction))];
+    });
+  }
+
   function resetWork() {
     setStrokes([]);
     setAnswers(Array(QUESTION_COUNT).fill(0));
@@ -244,7 +354,7 @@ export function SoloStudy({ session }: { session: ExamSession }) {
 
   async function gradePaper() {
     if (!keyAnswers || keyAnswers.some((value) => value < 1)) {
-      setMessage("관리자 페이지에서 이 회차 정답을 먼저 저장해 주세요.");
+      setMessage("이 회차 정답이 아직 없습니다.");
       setResult(null);
       return;
     }
@@ -262,6 +372,7 @@ export function SoloStudy({ session }: { session: ExamSession }) {
     const total = points.reduce((sum, value) => sum + value, 0);
     setMessage("");
     setResult({ score, total, wrong });
+    if (guest) return;
     setSaving(true);
     try {
       await saveSoloArchive({
@@ -283,98 +394,96 @@ export function SoloStudy({ session }: { session: ExamSession }) {
   }
 
   const omrCard = (
-    <aside className="flex h-full max-h-full flex-col rounded-[4px] border border-[#333] bg-[#1f1f1f]">
-      <div className="border-b border-white/8 px-3 py-3">
-        <p className="text-xs font-bold tracking-[0.16em] text-[#808080]">OMR 카드</p>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <IdField label="학년" value={grade} min={1} max={3} onChange={setGrade} />
-          <IdField label="반" value={classNumber} min={1} max={15} onChange={setClassNumber} />
-          <IdField label="번호" value={studentNumber} min={1} max={40} onChange={setStudentNumber} />
-        </div>
-        <p className="mt-2 text-[11px] text-[#808080]">
-          {gradeLabel(grade)} {classLabel(classNumber)} {studentLabel(studentNumber)}
-        </p>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {Array.from({ length: QUESTION_COUNT }, (_, question) => (
-          <div
-            key={question}
-            className={cn(
-              "mb-1 grid grid-cols-[36px_1fr] items-center rounded-[4px] px-1 py-1",
-              current === question && "bg-white/8",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => setCurrent(question)}
-              className="text-sm font-bold text-[#e50914]"
-            >
-              {question + 1}
-            </button>
-            <div className="flex gap-1">
-              {CHOICES.map((choice) => {
-                const selected = answers[question] === choice;
-                return (
-                  <button
-                    key={choice}
-                    type="button"
-                    onClick={() => setAnswer(question, choice)}
-                    className={cn(
-                      "grid h-9 flex-1 place-items-center rounded-full border text-xs",
-                      selected
-                        ? "border-[#e50914] bg-[#e50914] text-white"
-                        : "border-white/20 text-[#d0d0d0]",
-                    )}
-                  >
-                    {choice}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        <div className="mt-2 px-1 pb-2">
-          {message ? <p className="mb-2 text-xs leading-5 text-[#f0c8c8]">{message}</p> : null}
+    <OmrCardSheet
+      title="OMR 카드"
+      subtitle={session.label}
+      answers={answers}
+      current={current}
+      onAnswer={setAnswer}
+      onFocus={setCurrent}
+      onCollapse={() => {
+        setOmrOpen(false);
+        setOmrDesktopPersist(false);
+      }}
+      identity={
+        <IdentityRow
+          tone="exam"
+          grade={grade}
+          classNumber={classNumber}
+          studentNumber={studentNumber}
+          onGrade={setGrade}
+          onClass={setClassNumber}
+          onStudent={setStudentNumber}
+        />
+      }
+      footer={
+        <div>
+          {message ? <p className="mb-2 text-xs leading-5 text-[#8a1020]">{message}</p> : null}
           {result ? (
-            <div className="mb-2 rounded-[4px] bg-black/30 px-3 py-2 text-sm">
-              <p className="font-bold text-white">
+            <div className="mb-2 border border-[#c41e3a] bg-[#fffdf6] px-3 py-2 text-sm">
+              <p className="font-black text-[#141414]">
                 {result.score} / {result.total}점
               </p>
-              <p className="mt-1 text-xs text-[#b3b3b3]">
+              <p className="mt-1 text-xs font-bold text-[#5a3a3a]">
                 {result.wrong.length === 0
                   ? "만점입니다."
                   : `틀린 문항 ${result.wrong.join(", ")}`}
               </p>
             </div>
           ) : null}
-          <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className={cn("grid gap-2", guest ? "grid-cols-1" : "grid-cols-[1fr_auto]")}>
             <button
               type="button"
               onClick={() => void gradePaper()}
               disabled={saving}
-              className="h-12 rounded-[4px] bg-[#e50914] text-sm font-bold text-white hover:bg-[#c00710] disabled:opacity-60"
+              className="h-11 rounded-[2px] bg-[#c41e3a] text-sm font-black text-white hover:bg-[#a01830] disabled:opacity-60"
             >
               {saving ? "보관소로 이동 중..." : "채점하기"}
             </button>
-            <button
-              type="button"
-              onClick={() => router.push("/vault/")}
-              className="h-12 rounded-[4px] bg-white/10 px-4 text-sm font-bold text-white"
-            >
-              보관소
-            </button>
+            {guest ? null : (
+              <button
+                type="button"
+                onClick={() => router.push("/vault/")}
+                className="h-11 rounded-[2px] border border-[#141414] bg-[#fffdf6] px-4 text-sm font-black text-[#141414]"
+              >
+                보관소
+              </button>
+            )}
           </div>
         </div>
-      </div>
-    </aside>
+      }
+    />
   );
 
-  const clock = formatClock(remaining);
+  const timer = (
+    <SoloTimerBar
+      minutes={minutes}
+      seconds={seconds}
+      remaining={remaining}
+      running={running}
+      alarm={alarm}
+      onMinutes={setMinutes}
+      onSeconds={setSeconds}
+      onApply={applyDuration}
+      onToggle={running ? pauseTimer : startTimer}
+    />
+  );
+  const timerInHeader = Boolean(headerSlot && wide && !guest);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0f0f0f]">
+      {timerInHeader && headerSlot ? createPortal(timer, headerSlot) : null}
       <div className="z-10 shrink-0 border-b border-white/8 bg-[#141414]/95 px-2 py-1.5 backdrop-blur-sm sm:px-4">
         <div className="flex items-center gap-2">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white"
+            >
+              메뉴
+            </button>
+          ) : null}
           <div className="hidden min-w-0 md:block md:w-[180px] xl:w-[220px]">
             <p className="truncate text-sm font-bold">{session.label}</p>
             <p className="text-[11px] text-[#808080]">
@@ -382,73 +491,22 @@ export function SoloStudy({ session }: { session: ExamSession }) {
             </p>
           </div>
           <div className="min-w-0 flex-1">
-            <div
-              className={cn(
-                "flex flex-wrap items-center justify-center gap-1.5 rounded-[4px] border px-1.5 py-1 sm:gap-2 sm:px-2",
-                alarm ? "border-[#e50914] bg-[#e50914]/15" : "border-[#e50914]/70 bg-black/35",
-              )}
-            >
-              <label className="flex items-center gap-1 text-[11px] text-[#808080]">
-                분
-                <input
-                  type="number"
-                  min={0}
-                  max={180}
-                  inputMode="numeric"
-                  value={minutes}
-                  onChange={(event) => setMinutes(Math.max(0, Number(event.target.value) || 0))}
-                  className="h-10 w-11 rounded-[4px] border border-white/15 bg-black/40 text-center text-base text-white sm:h-8 sm:w-12 sm:text-sm"
-                />
-              </label>
-              <label className="flex items-center gap-1 text-[11px] text-[#808080]">
-                초
-                <input
-                  type="number"
-                  min={0}
-                  max={59}
-                  inputMode="numeric"
-                  value={seconds}
-                  onChange={(event) => setSeconds(Math.min(59, Math.max(0, Number(event.target.value) || 0)))}
-                  className="h-10 w-11 rounded-[4px] border border-white/15 bg-black/40 text-center text-base text-white sm:h-8 sm:w-12 sm:text-sm"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={applyDuration}
-                className="h-10 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white sm:h-8"
-              >
-                적용
-              </button>
-              <p
-                className={cn(
-                  "min-w-[3.75rem] text-center text-lg font-black tabular-nums sm:min-w-[4.5rem] sm:text-base",
-                  alarm || remaining <= 60 ? "text-[#e50914]" : "text-white",
-                )}
-              >
-                {clock.label}
-              </p>
-              <button
-                type="button"
-                onClick={running ? pauseTimer : startTimer}
-                className="h-10 rounded-[4px] bg-[#e50914] px-2.5 text-[11px] font-bold text-white sm:h-8 sm:px-3"
-              >
-                {running ? "정지" : "시작"}
-              </button>
-              <button
-                type="button"
-                onClick={applyDuration}
-                className="h-10 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white sm:h-8"
-              >
-                리셋
-              </button>
-            </div>
+            {timerInHeader ? null : timer}
           </div>
           <button
             type="button"
-            onClick={() => setOmrOpen((value) => !value)}
-            className="h-10 shrink-0 rounded-[4px] bg-[#e50914] px-3 text-xs font-bold text-white md:hidden"
+            onClick={() => {
+              if (wide) setOmrDesktopPersist(!omrDesktop);
+              else setOmrOpen((value) => !value);
+            }}
+            className={cn(
+              "h-10 shrink-0 rounded-[4px] px-3 text-xs font-bold",
+              (wide ? omrDesktop : omrOpen)
+                ? "bg-[#e50914] text-white"
+                : "bg-white/10 text-white",
+            )}
           >
-            OMR
+            {wide && omrDesktop ? "OMR 접기" : "OMR"}
           </button>
         </div>
         <div className="-mx-1 mt-1.5 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -510,25 +568,71 @@ export function SoloStudy({ session }: { session: ExamSession }) {
           >
             초기화
           </button>
+          <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-white/15 sm:block" />
+          <div className="flex shrink-0 items-center gap-1 rounded-[4px] bg-white/8 px-1 py-0.5">
+            <button
+              type="button"
+              title="축소"
+              aria-label="시험지 축소"
+              onClick={() => bumpZoom(-1)}
+              disabled={zoom <= ZOOM_STEPS[0]}
+              className="grid h-10 w-10 place-items-center rounded-[4px] text-white disabled:opacity-35 sm:h-9 sm:w-9"
+            >
+              <ZoomIcon minus />
+            </button>
+            <button
+              type="button"
+              title="원래 크기"
+              onClick={() => setZoom(1)}
+              className="min-w-12 text-center text-xs font-bold tabular-nums text-white"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              title="확대"
+              aria-label="시험지 확대"
+              onClick={() => bumpZoom(1)}
+              disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]}
+              className="grid h-10 w-10 place-items-center rounded-[4px] text-white disabled:opacity-35 sm:h-9 sm:w-9"
+            >
+              <ZoomIcon />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_240px] xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex min-h-0 justify-center overflow-auto px-2 py-3 sm:px-4 sm:py-4">
-          {paperSrc ? (
-            <SoloPaper
-              src={paperSrc}
-              tool={tool}
-              color={color}
-              strokes={strokes}
-              onStrokes={setStrokes}
-              onMark={markFromPaper}
-            />
-          ) : (
-            <p className="py-24 text-center text-sm text-[#808080]">이 회차 시험지가 없습니다.</p>
-          )}
+      <div className="relative min-h-0 flex-1">
+        <div ref={paperPane} className="absolute inset-0 overflow-auto">
+          <div className="flex min-h-full min-w-full justify-safe-center px-2 py-3 sm:px-4 sm:py-4">
+            {paperSrc ? (
+              <SoloPaper
+                src={paperSrc}
+                tool={tool}
+                color={color}
+                strokes={strokes}
+                onStrokes={setStrokes}
+                onMark={markFromPaper}
+                zoom={zoom}
+              />
+            ) : (
+              <p className="py-24 text-center text-sm text-[#808080]">이 회차 시험지가 없습니다.</p>
+            )}
+          </div>
         </div>
-        <div className="hidden h-full min-h-0 md:block">{omrCard}</div>
+        {omrDesktop ? (
+          <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-[260px] md:block xl:inset-y-3 xl:right-3 xl:w-[300px]">
+            <div className="pointer-events-auto h-full min-h-0">{omrCard}</div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOmrDesktopPersist(true)}
+            className="absolute top-1/2 right-0 hidden -translate-y-1/2 rounded-l-[4px] border border-r-0 border-white/10 bg-[#c41e3a] px-2 py-8 text-[11px] font-black tracking-[0.18em] text-white md:block"
+          >
+            OMR
+          </button>
+        )}
       </div>
 
       {omrOpen ? (
@@ -545,6 +649,102 @@ export function SoloStudy({ session }: { session: ExamSession }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function SoloTimerBar({
+  minutes,
+  seconds,
+  remaining,
+  running,
+  alarm,
+  onMinutes,
+  onSeconds,
+  onApply,
+  onToggle,
+}: {
+  minutes: number;
+  seconds: number;
+  remaining: number;
+  running: boolean;
+  alarm: boolean;
+  onMinutes: (value: number) => void;
+  onSeconds: (value: number) => void;
+  onApply: () => void;
+  onToggle: () => void;
+}) {
+  const clock = formatClock(remaining);
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 rounded-[4px] border px-1.5 py-1 sm:gap-1.5",
+        alarm ? "border-[#e50914] bg-[#e50914]/15" : "border-[#e50914]/70 bg-black/35",
+      )}
+    >
+      <label className="flex items-center gap-1 text-[11px] text-[#808080]">
+        분
+        <input
+          type="number"
+          min={0}
+          max={180}
+          inputMode="numeric"
+          value={minutes}
+          onChange={(event) => onMinutes(Math.max(0, Number(event.target.value) || 0))}
+          className="h-8 w-10 rounded-[4px] border border-white/15 bg-black/40 text-center text-sm text-white sm:w-11"
+        />
+      </label>
+      <label className="flex items-center gap-1 text-[11px] text-[#808080]">
+        초
+        <input
+          type="number"
+          min={0}
+          max={59}
+          inputMode="numeric"
+          value={seconds}
+          onChange={(event) => onSeconds(Math.min(59, Math.max(0, Number(event.target.value) || 0)))}
+          className="h-8 w-10 rounded-[4px] border border-white/15 bg-black/40 text-center text-sm text-white sm:w-11"
+        />
+      </label>
+      <button
+        type="button"
+        onClick={onApply}
+        className="h-8 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white"
+      >
+        적용
+      </button>
+      <p
+        className={cn(
+          "min-w-[3.5rem] text-center text-sm font-black tabular-nums sm:min-w-[4.25rem] sm:text-base",
+          alarm || remaining <= 60 ? "text-[#e50914]" : "text-white",
+        )}
+      >
+        {clock.label}
+      </p>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="h-8 rounded-[4px] bg-[#e50914] px-2.5 text-[11px] font-bold text-white"
+      >
+        {running ? "정지" : "시작"}
+      </button>
+      <button
+        type="button"
+        onClick={onApply}
+        className="h-8 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white"
+      >
+        리셋
+      </button>
+    </div>
+  );
+}
+
+function ZoomIcon({ minus = false }: { minus?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" aria-hidden>
+      <circle cx="10.5" cy="10.5" r="6.2" strokeWidth="1.8" />
+      <path d="M15.2 15.2 21 21" strokeWidth="1.8" strokeLinecap="round" />
+      <path d={minus ? "M7.6 10.5h5.8" : "M10.5 7.6v5.8M7.6 10.5h5.8"} strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -570,30 +770,3 @@ function playAlarm() {
   }
 }
 
-function IdField({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label>
-      <span className="mb-1 block text-[11px] text-[#808080]">{label}</span>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(Math.min(max, Math.max(min, Number(event.target.value) || min)))}
-        className="h-10 w-full rounded-[4px] border border-white/10 bg-black/30 px-2 text-center text-base"
-      />
-    </label>
-  );
-}

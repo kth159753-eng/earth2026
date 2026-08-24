@@ -1,11 +1,11 @@
 "use client";
 
+import { ActiveClassControl } from "@/components/ClassIdentity";
 import { BrandMark, Button } from "@/components/ui";
-import { subscribeActiveClass, type ActiveClass } from "@/lib/active-class";
 import { logoutTeacher } from "@/lib/auth";
 import { EXAM_SESSIONS, groupSessionsByYear, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
-import { classLabel, cn, gradeLabel } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -48,10 +48,30 @@ export function TeacherShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(true);
   const section = currentSection(pathname);
   const sessionId = searchParams.get("session") || sessionFromPath(pathname);
   const grouped = useMemo(() => groupSessionsByYear(), []);
   const solo = section === "solo";
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("earth-nav-sidebar");
+      if (raw === "0") setDesktopOpen(false);
+      if (raw === "1") setDesktopOpen(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function setDesktopSidebar(next: boolean) {
+    setDesktopOpen(next);
+    try {
+      localStorage.setItem("earth-nav-sidebar", next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function logout() {
     await logoutTeacher();
@@ -60,7 +80,6 @@ export function TeacherShell({
 
   return (
     <div className={cn("min-h-dvh bg-[#141414] text-white", solo && "flex h-dvh flex-col overflow-hidden")}>
-      {!solo ? (
       <div className="sticky top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent px-[4%] py-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:hidden">
         <BrandMark compact />
         <button
@@ -71,9 +90,8 @@ export function TeacherShell({
           회차
         </button>
       </div>
-      ) : null}
 
-      {open && !solo ? (
+      {open ? (
         <button
           type="button"
           className="fixed inset-0 z-30 bg-black/85 md:hidden"
@@ -82,15 +100,25 @@ export function TeacherShell({
         />
       ) : null}
 
-      {!solo ? (
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-[min(280px,86vw)] overflow-y-auto border-r border-[#1f1f1f] bg-black px-2 py-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] transition-transform duration-[250ms] md:w-[240px] lg:w-[248px]",
-          open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full",
+          desktopOpen ? "md:translate-x-0" : "md:-translate-x-full",
         )}
       >
-        <div className="mb-5 px-2">
+        <div className="mb-5 flex items-start justify-between gap-2 px-2">
           <BrandMark />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setDesktopSidebar(false);
+            }}
+            className="mt-1 hidden h-8 rounded-[4px] bg-white/10 px-2 text-[11px] font-bold text-white md:inline-flex md:items-center"
+          >
+            접기
+          </button>
         </div>
         <div className="mb-4 rounded-[4px] bg-[#1f1f1f] px-3 py-3">
           <p className="text-[11px] font-semibold tracking-[0.16em] text-[#808080] uppercase">
@@ -129,11 +157,33 @@ export function TeacherShell({
           </div>
         ))}
       </aside>
-      ) : null}
 
-      <div className={cn(!solo && "md:pl-[240px] lg:pl-[248px]", solo && "flex min-h-0 flex-1 flex-col overflow-hidden")}>
+      {desktopOpen ? null : (
+        <button
+          type="button"
+          onClick={() => setDesktopSidebar(true)}
+          className="fixed top-1/2 left-0 z-40 hidden -translate-y-1/2 rounded-r-[4px] border border-l-0 border-white/10 bg-black/90 px-2 py-8 text-[11px] font-bold tracking-[0.18em] text-white md:block"
+        >
+          회차
+        </button>
+      )}
+
+      <div
+        className={cn(
+          "transition-[padding] duration-[250ms]",
+          desktopOpen && "md:pl-[240px] lg:pl-[248px]",
+          solo && "flex min-h-0 flex-1 flex-col overflow-hidden",
+        )}
+      >
         <header className="sticky top-0 z-20 shrink-0 bg-gradient-to-b from-black/88 to-transparent px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-[4%] sm:py-3">
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDesktopSidebar(!desktopOpen)}
+              className="hidden h-10 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white md:inline-flex md:items-center"
+            >
+              {desktopOpen ? "회차 접기" : "회차"}
+            </button>
             <nav className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:text-[13px]">
               {NAV.map((item) => {
                 const active = section === item.id;
@@ -153,25 +203,13 @@ export function TeacherShell({
                   </Link>
                 );
               })}
-              <ActiveClassBadge />
             </nav>
+            <ActiveClassControl />
+            <div id="earth-header-timer" className="hidden min-w-0 shrink-0 md:flex md:items-center" />
             <Button variant="ghost" className="h-10 shrink-0 px-3 sm:h-9 sm:px-5" onClick={logout}>
               로그아웃
             </Button>
           </div>
-          {solo ? (
-            <select
-              value={sessionId}
-              onChange={(event) => router.push(hrefFor("solo", event.target.value))}
-              className="mt-2 h-11 w-full rounded-[4px] border border-white/15 bg-black/40 px-3 text-base sm:h-9 sm:max-w-xs sm:text-sm md:max-w-sm"
-            >
-              {EXAM_SESSIONS.map((session) => (
-                <option key={session.id} value={session.id}>
-                  {session.label}
-                </option>
-              ))}
-            </select>
-          ) : null}
         </header>
         <div
           className={cn(
@@ -183,29 +221,6 @@ export function TeacherShell({
         </div>
       </div>
     </div>
-  );
-}
-
-function ActiveClassBadge() {
-  const [active, setActive] = useState<ActiveClass | null>(null);
-
-  useEffect(() => subscribeActiveClass(setActive), []);
-
-  if (!active) return null;
-
-  return (
-    <span
-      className="shrink-0 rounded-[4px] bg-white/10 px-2 py-2 text-[12px] font-bold text-white sm:px-4 sm:py-2.5 sm:text-[13px]"
-      title="교실 모의고사에서 선택한 학급"
-    >
-      {active.running ? (
-        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[#e50914] align-middle" />
-      ) : null}
-      {gradeLabel(active.grade)} {classLabel(active.classNumber)}
-      {active.running ? (
-        <span className="ml-1.5 hidden text-[11px] font-semibold text-[#e50914] sm:inline">진행 중</span>
-      ) : null}
-    </span>
   );
 }
 

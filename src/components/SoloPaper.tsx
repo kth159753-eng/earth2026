@@ -2,6 +2,13 @@
 
 import { BASE_PATH } from "@/lib/config";
 import { QUESTION_COUNT } from "@/lib/exams";
+import {
+  buildPageOmrMap,
+  hitChoiceBox,
+  locateFromMap,
+  strokeCentroid,
+  type PageOmrMap,
+} from "@/lib/paper-omr";
 import { cn } from "@/lib/utils";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -62,16 +69,18 @@ type Props = {
   strokes: InkStroke[];
   onStrokes: (next: InkStroke[] | ((current: InkStroke[]) => InkStroke[])) => void;
   onMark: (choice: number, question?: number) => void;
+  zoom?: number;
 };
 
 type PageSize = { width: number; height: number };
 
 const EMPTY_STROKES: InkStroke[] = [];
 
-export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark }: Props) {
+export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom = 1 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [sizes, setSizes] = useState<PageSize[]>([]);
+  const [maps, setMaps] = useState<PageOmrMap[]>([]);
   const [error, setError] = useState("");
   const [renderWidth, setRenderWidth] = useState(0);
   const widthRef = useRef(0);
@@ -79,6 +88,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark }: Prop
   useEffect(() => {
     setPages([]);
     setSizes([]);
+    setMaps([]);
     setError("");
     widthRef.current = 0;
   }, [src]);
@@ -117,6 +127,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark }: Prop
         const document = await loadPdf(src);
         const nextPages: HTMLCanvasElement[] = [];
         const nextSizes: PageSize[] = [];
+        const nextMaps: PageOmrMap[] = [];
         for (let index = 1; index <= document.numPages; index += 1) {
           const page = await document.getPage(index);
           const unscaled = page.getViewport({ scale: 1 });
@@ -128,11 +139,25 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark }: Prop
           const context = canvas.getContext("2d", { alpha: false });
           if (!context) continue;
           await page.render({ canvasContext: context, viewport, intent: "display" }).promise;
+          const content = await page.getTextContent();
+          const items = content.items.flatMap((item) => {
+            if (!("str" in item) || !item.str) return [];
+            const transform = item.transform;
+            return [
+              {
+                str: item.str,
+                x: transform[4] / unscaled.width,
+                y: 1 - transform[5] / unscaled.height,
+              },
+            ];
+          });
           nextPages.push(canvas);
           nextSizes.push({ width: canvas.width, height: canvas.height });
+          nextMaps.push(buildPageOmrMap(items));
           if (!cancelled) {
             setPages(nextPages.slice());
             setSizes(nextSizes.slice());
+            setMaps(nextMaps.slice());
           }
         }
       } catch {
@@ -157,7 +182,11 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark }: Prop
   }, [strokes]);
 
   return (
-    <div ref={hostRef} className="mx-auto w-full max-w-[860px] space-y-3 sm:space-y-4">
+    <div
+      ref={hostRef}
+      className="mx-auto w-full space-y-3 sm:space-y-4"
+      style={{ maxWidth: Math.round(860 * zoom) }}
+    >
       {error ? <p className="py-20 text-center text-sm text-[#808080]">{error}</p> : null}
       {!error && pages.length === 0 ? (
         <p className="py-20 text-center text-sm text-[#808080]">시험지를 열고 있습니다...</p>
@@ -174,6 +203,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark }: Prop
           onStrokes={onStrokes}
           onMark={onMark}
           pageCount={pages.length}
+          omrMap={maps[index]}
         />
       ))}
     </div>
@@ -190,6 +220,7 @@ const PaperPage = memo(function PaperPage({
   onStrokes,
   onMark,
   pageCount,
+  omrMap,
 }: {
   pageIndex: number;
   bitmap: HTMLCanvasElement;
@@ -200,6 +231,7 @@ const PaperPage = memo(function PaperPage({
   onStrokes: (next: InkStroke[] | ((current: InkStroke[]) => InkStroke[])) => void;
   onMark: (choice: number, question?: number) => void;
   pageCount: number;
+  omrMap?: PageOmrMap;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const inkRef = useRef<HTMLCanvasElement>(null);
@@ -247,7 +279,8 @@ const PaperPage = memo(function PaperPage({
       return;
     }
     if (typeof tool === "number") {
-      const located = locateMark(pageIndex, pageCount, point.x, point.y);
+      const located =
+        locateFromMap(omrMap, point) ?? locateMark(pageIndex, pageCount, point.x, point.y);
       const mark: InkStroke = {
         id: `${Date.now()}-${Math.random()}`,
         page: pageIndex,
@@ -287,15 +320,22 @@ const PaperPage = memo(function PaperPage({
     drawing.current = null;
     if (!stroke || stroke.points.length < 1) return;
     const last = stroke.points[stroke.points.length - 1] ?? stroke.points[0];
-    const located = last ? locateMark(pageIndex, pageCount, last.x, last.y) : null;
-    const check = isCheckStroke(stroke);
+    const focus = strokeCentroid(stroke.points);
+    const boxed = hitChoiceBox(omrMap, focus) ?? (last ? hitChoiceBox(omrMap, last) : null);
+    const located =
+      boxed ??
+      (isCheckStroke(stroke)
+        ? locateFromMap(omrMap, focus) ??
+          (last ? locateFromMap(omrMap, last) : null) ??
+          (last ? locateMark(pageIndex, pageCount, last.x, last.y) : null)
+        : null);
     const nextStroke: InkStroke = {
       ...stroke,
       question: located?.question,
-      omrChoice: check ? located?.choice : undefined,
+      omrChoice: located?.choice,
     };
     onStrokes((current) => [...current, nextStroke]);
-    if (check && located) onMark(located.choice, located.question);
+    if (located) onMark(located.choice, located.question);
   }
 
   return (

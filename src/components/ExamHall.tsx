@@ -1,7 +1,8 @@
 "use client";
 
 import { ensureOmrCode } from "@/lib/actions/teacher";
-import { readActiveClass, writeActiveClass } from "@/lib/active-class";
+import { IdentityRow } from "@/components/ClassIdentity";
+import { readActiveClass, subscribeActiveClass, writeActiveClass } from "@/lib/active-class";
 import { siblingSession, type ExamSession } from "@/lib/exams";
 import type { ClassConfig } from "@/lib/types";
 import { omrUrl as buildOmrUrl } from "@/lib/config";
@@ -29,6 +30,42 @@ function suneungCountdown(today = new Date()) {
   return days > 0 ? `D-${days}` : days === 0 ? "D-DAY" : `D+${Math.abs(days)}`;
 }
 
+function clockTension(remaining: number, alarm: boolean) {
+  if (alarm || remaining <= 5 * 60) return "panic" as const;
+  if (remaining <= 10 * 60) return "hot" as const;
+  if (remaining <= 15 * 60) return "warn" as const;
+  return "calm" as const;
+}
+
+const SWEAT_COUNT = { calm: 0, warn: 8, hot: 16, panic: 28 } as const;
+const SWEAT_DURATION = { warn: 2.1, hot: 1.35, panic: 0.75 } as const;
+
+function SweatDrops({ level }: { level: Exclude<ReturnType<typeof clockTension>, "calm"> }) {
+  const count = SWEAT_COUNT[level];
+  const duration = SWEAT_DURATION[level];
+  return (
+    <div className="sweat-layer" aria-hidden>
+      {Array.from({ length: count }, (_, index) => {
+        const left = 6 + ((index * 37) % 88);
+        const top = (index % 5) * 10;
+        const delay = ((index * 13) % 18) / 10;
+        return (
+          <span
+            key={index}
+            className={cn("sweat-drop", `sweat-drop-${level}`)}
+            style={{
+              left: `${left}%`,
+              top: `${top}%`,
+              animationDuration: `${duration + (index % 5) * 0.08}s`,
+              animationDelay: `${delay}s`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function ClockFace({
   display,
   remaining,
@@ -38,16 +75,21 @@ function ClockFace({
   remaining: number;
   alarm: boolean;
 }) {
+  const level = clockTension(remaining, alarm);
   return (
-    <div
-      className={cn(
-        "clock-glow mx-auto font-bold leading-none text-white",
-        remaining <= 60 && remaining > 0 && "text-[#e50914]",
-        alarm && "text-[#e50914]",
-      )}
-    >
-      {display.hours !== "00" ? `${display.hours}:` : null}
-      {display.minutes}:{display.seconds}
+    <div className="relative mx-auto w-fit">
+      {level !== "calm" ? <SweatDrops level={level} /> : null}
+      <div
+        className={cn(
+          "clock-glow relative font-bold leading-none whitespace-nowrap text-white",
+          level === "warn" && "clock-glow-warn",
+          level === "hot" && "clock-glow-hot",
+          level === "panic" && "clock-glow-panic",
+        )}
+      >
+        {display.hours !== "00" ? `${display.hours}:` : null}
+        {display.minutes}:{display.seconds}
+      </div>
     </div>
   );
 }
@@ -92,6 +134,24 @@ export function ExamHall({ session, classes }: Props) {
       setClassNumber(saved.classNumber);
     }
     setClassReady(true);
+  }, [classReady, classes]);
+
+  useEffect(() => {
+    if (!classReady) return;
+    return subscribeActiveClass((next) => {
+      if (!next) return;
+      if (
+        !classes.some(
+          (row) => row.grade === next.grade && row.class_number === next.classNumber,
+        )
+      ) {
+        return;
+      }
+      setGrade((current) => (current === next.grade ? current : next.grade));
+      setClassNumber((current) =>
+        current === next.classNumber ? current : next.classNumber,
+      );
+    });
   }, [classReady, classes]);
 
   useEffect(() => {
@@ -278,7 +338,7 @@ export function ExamHall({ session, classes }: Props) {
             )}
           >
             <p className="text-base font-bold text-[#c8c8c8] sm:text-lg">남은 시간</p>
-            <div className="mt-3" style={{ fontSize: "clamp(3.25rem, 18vw, 13rem)" }}>
+            <div className="mt-3" style={{ fontSize: "clamp(3.75rem, 20vw, 14rem)" }}>
               <ClockFace display={display} remaining={remaining} alarm={alarm} />
             </div>
             <div className="nf-progress mx-auto mt-6 h-2 w-full max-w-3xl sm:mt-8">
@@ -309,30 +369,16 @@ export function ExamHall({ session, classes }: Props) {
               </p>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={grade}
-                    onChange={(event) => setGrade(Number(event.target.value))}
-                    className="h-10 rounded-[4px] border border-[#555] bg-[rgba(22,22,22,0.66)] px-3 text-sm"
-                  >
-                    {grouped.grades.map((value) => (
-                      <option key={value} value={value}>
-                        {gradeLabel(value)}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={classNumber}
-                    onChange={(event) => setClassNumber(Number(event.target.value))}
-                    className="h-10 rounded-[4px] border border-[#555] bg-[rgba(22,22,22,0.66)] px-3 text-sm"
-                  >
-                    {classOptions.map((row) => (
-                      <option key={row.class_number} value={row.class_number}>
-                        {classLabel(row.class_number)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <IdentityRow
+                  grade={grade}
+                  classNumber={classNumber}
+                  onGrade={setGrade}
+                  onClass={(value) => {
+                    const available = classes.filter((row) => row.grade === grade);
+                    const exists = available.some((row) => row.class_number === value);
+                    setClassNumber(exists ? value : available[0]?.class_number ?? value);
+                  }}
+                />
 
                 <button
                   type="button"
@@ -402,7 +448,7 @@ export function ExamHall({ session, classes }: Props) {
                   </p>
                 </div>
 
-                <div className="mt-8 grid w-full grid-cols-[minmax(92px,168px)_minmax(0,1fr)_minmax(92px,168px)] items-center gap-3 sm:mt-10 sm:grid-cols-[minmax(120px,196px)_minmax(0,1fr)_minmax(120px,196px)] sm:gap-8 lg:gap-12">
+                <div className="mt-6 grid w-full grid-cols-[minmax(84px,150px)_minmax(0,1fr)_minmax(84px,150px)] items-center gap-2 sm:mt-8 sm:grid-cols-[minmax(110px,176px)_minmax(0,1fr)_minmax(110px,176px)] sm:gap-6 lg:gap-8">
                   <ImmersiveQr label="지I" url={urlI} />
                   <div className="min-w-0 text-center">
                     <p className="mb-2 text-[11px] tracking-[0.28em] text-[#6a6a6a] sm:text-xs">
@@ -410,7 +456,7 @@ export function ExamHall({ session, classes }: Props) {
                     </p>
                     <div
                       className="leading-none"
-                      style={{ fontSize: "clamp(3.25rem, 14vw, 11.5rem)" }}
+                      style={{ fontSize: "clamp(5.25rem, 22vw, 16.5rem)" }}
                     >
                       <ClockFace display={display} remaining={remaining} alarm={alarm} />
                     </div>
@@ -455,11 +501,16 @@ function ImmersiveQr({
 }) {
   return (
     <div className="mx-auto w-full">
-      <p className="mb-2 text-center text-[11px] font-semibold tracking-[0.22em] text-[#8a8a8a] sm:text-xs">
+      <p
+        className={cn(
+          "mb-2 text-center text-[11px] font-semibold tracking-[0.22em] sm:text-xs",
+          url ? "text-[#8a8a8a]" : "text-[#6a4a4a]",
+        )}
+      >
         {label}
       </p>
-      <div className="aspect-square rounded-[6px] bg-white p-[8%]">
-        {url ? (
+      {url ? (
+        <div className="aspect-square rounded-[6px] bg-white p-[8%]">
           <QRCodeSVG
             value={url}
             size={196}
@@ -468,14 +519,24 @@ function ImmersiveQr({
             bgColor="#ffffff"
             fgColor="#141414"
           />
-        ) : (
-          <div className="grid h-full place-items-center text-center text-[10px] leading-5 text-[#8a8a8a] sm:text-xs">
-            이번 회차
-            <br />
-            없음
+        </div>
+      ) : (
+        <div className="relative aspect-square overflow-hidden rounded-[6px] ring-1 ring-white/8">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#5a1c22] via-[#1a1012] to-[#0b0b10]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_28%_18%,rgba(229,9,20,0.38),transparent_58%)]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/25" />
+          <div className="absolute -left-1/3 top-0 h-full w-[70%] rotate-12 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="absolute inset-[12%] rounded-[4px] border border-white/10 bg-gradient-to-br from-white/5 to-transparent" />
+          <div className="relative grid h-full place-items-center px-2">
+            <div className="text-center">
+              <p className="text-[10px] tracking-[0.28em] text-[#8a6868] sm:text-xs">이번 회차</p>
+              <p className="mt-1 bg-gradient-to-r from-[#7a5050] via-[#f0c8c8] to-[#5a3838] bg-clip-text text-[clamp(0.95rem,2.4vw,1.4rem)] font-bold tracking-[0.16em] text-transparent">
+                없음
+              </p>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

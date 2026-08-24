@@ -1,12 +1,21 @@
 "use client";
 
-import { CHOICE_COUNT, EXAM_SESSIONS, QUESTION_COUNT } from "@/lib/exams";
+import { OmrCardSheet } from "@/components/OmrCardSheet";
+import { EXAM_SESSIONS, QUESTION_COUNT } from "@/lib/exams";
 import { createClient } from "@/lib/supabase/client";
 import type { OmrMeta } from "@/lib/types";
-import { classLabel, cn, gradeLabel, studentLabel } from "@/lib/utils";
+import { classLabel, gradeLabel, studentLabel } from "@/lib/utils";
 import { useMemo, useState } from "react";
 
-export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
+export function OmrForm({
+  code,
+  meta,
+  onBack,
+}: {
+  code: string;
+  meta: OmrMeta;
+  onBack?: () => void;
+}) {
   const session = EXAM_SESSIONS.find((item) => item.id === meta.session_id);
   const [studentNumber, setStudentNumber] = useState(1);
   const [answers, setAnswers] = useState<number[]>(
@@ -58,86 +67,68 @@ export function OmrForm({ code, meta }: { code: string; meta: OmrMeta }) {
   }
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <p className="text-[11px] tracking-[0.28em] text-[#e50914]">EARTH 2026 OMR</p>
-      <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.03em] sm:text-[36px] lg:text-[40px]">
-        {session?.label ?? "모의고사"}
-      </h1>
-      <p className="mt-1 text-sm text-stone-400">
-        {gradeLabel(meta.grade)} {classLabel(meta.class_number)} · 이름 없이 번호만 입력합니다
-      </p>
-
-      <form onSubmit={onSubmit} className="mt-6 space-y-5">
-        <label className="block">
-          <span className="mb-2 block text-sm text-stone-300">출석번호</span>
-          <select
-            value={studentNumber}
-            onChange={(event) => {
-              setStudentNumber(Number(event.target.value));
-              setDone(false);
-            }}
-            className="h-12 w-full rounded-[4px] border border-white/10 bg-black/40 px-3 text-base"
-          >
-            {roster.map((number) => (
-              <option key={number} value={number}>
-                {studentLabel(number)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="overflow-hidden rounded-[4px] border border-white/10">
-          {Array.from({ length: QUESTION_COUNT }, (_, question) => (
-            <div
-              key={question}
-              className="grid grid-cols-[44px_1fr] items-center border-b border-white/8 last:border-b-0 sm:grid-cols-[52px_1fr]"
-            >
-              <div className="bg-white/5 py-3 text-center text-sm font-semibold text-[#e50914]">
-                {question + 1}
-              </div>
-              <div className="flex justify-around gap-1 px-1.5 py-2 sm:px-2">
-                {Array.from({ length: CHOICE_COUNT }, (_, choice) => {
-                  const value = choice + 1;
-                  const selected = answers[question] === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setAnswer(question, value)}
-                      className={cn(
-                        "grid h-11 w-11 min-w-11 flex-1 place-items-center rounded-full border text-sm sm:max-w-12",
-                        selected
-                          ? "border-[#e50914] bg-[#e50914] text-white"
-                          : "border-stone-500 text-stone-300",
-                      )}
-                    >
-                      {value}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {error ? (
-          <p className="rounded-[4px] border border-rose-400/20 bg-rose-950/40 px-4 py-3 text-sm">
-            {error}
-          </p>
-        ) : null}
-        {done ? (
-          <p className="rounded-[4px] border border-teal/25 bg-teal/10 px-4 py-3 text-sm text-teal">
-            제출이 완료되었습니다. 수정이 필요하면 다시 제출할 수 있습니다.
-          </p>
-        ) : null}
-
+    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-3 py-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {onBack ? (
         <button
-          type="submit"
-          disabled={pending}
-          className="h-13 w-full rounded-[4px] bg-[#e50914] text-base font-bold text-white disabled:opacity-50"
+          type="button"
+          onClick={onBack}
+          className="mb-3 h-11 w-fit rounded-[4px] bg-white/8 px-4 text-sm font-bold text-[#d0d0d0]"
         >
-          {pending ? "제출 중..." : "OMR 제출"}
+          메뉴
         </button>
+      ) : null}
+
+      <form onSubmit={onSubmit} className="min-h-0 flex-1">
+        <div className="h-[min(82dvh,820px)]">
+          <OmrCardSheet
+            title={session?.label ?? "모의고사"}
+            subtitle={`${gradeLabel(meta.grade)} ${classLabel(meta.class_number)} · 이름 없이 번호만`}
+            answers={answers}
+            onAnswer={setAnswer}
+            identity={
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black tracking-[0.18em] text-[#c41e3a]">
+                  출석번호
+                </span>
+                <select
+                  value={studentNumber}
+                  onChange={(event) => {
+                    setStudentNumber(Number(event.target.value));
+                    setDone(false);
+                  }}
+                  className="h-11 w-full rounded-[2px] border border-[#c41e3a] bg-[#fffdf6] px-3 text-base font-black text-[#141414]"
+                >
+                  {roster.map((number) => (
+                    <option key={number} value={number}>
+                      {studentLabel(number)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            }
+            footer={
+              <div>
+                {error ? (
+                  <p className="mb-2 border border-[#c41e3a] bg-[#f8d5d8] px-3 py-2 text-xs font-bold text-[#8a1020]">
+                    {error}
+                  </p>
+                ) : null}
+                {done ? (
+                  <p className="mb-2 border border-[#141414] bg-[#fffdf6] px-3 py-2 text-xs font-bold text-[#141414]">
+                    제출이 완료되었습니다. 수정이 필요하면 다시 제출할 수 있습니다.
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="h-12 w-full rounded-[2px] bg-[#c41e3a] text-base font-black text-white disabled:opacity-50"
+                >
+                  {pending ? "제출 중..." : "OMR 제출"}
+                </button>
+              </div>
+            }
+          />
+        </div>
       </form>
     </main>
   );
