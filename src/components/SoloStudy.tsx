@@ -285,8 +285,9 @@ export function SoloStudy({
   }, []);
 
   useEffect(() => {
-    const host = paperPane.current;
-    if (!host) return;
+    const node = paperPane.current;
+    if (!node) return;
+    const host: HTMLDivElement = node;
     const onWheel = (event: WheelEvent) => {
       if (!(event.ctrlKey || event.metaKey || event.deltaY)) return;
       if (!(event.ctrlKey || event.metaKey)) return;
@@ -298,8 +299,9 @@ export function SoloStudy({
   }, []);
 
   useEffect(() => {
-    const host = paperPane.current;
-    if (!host) return;
+    const node = paperPane.current;
+    if (!node) return;
+    const host: HTMLDivElement = node;
     let pinching = false;
     let startDist = 1;
     let startZoom = 1;
@@ -310,18 +312,13 @@ export function SoloStudy({
       return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     }
 
-    function scroller() {
-      return paperPane.current ?? host;
-    }
-
     function onStart(event: TouchEvent) {
-      const pane = scroller();
       if (event.touches.length !== 2) return;
       pinching = true;
       startDist = distance(event.touches[0], event.touches[1]) || 1;
       startZoom = zoomRef.current;
-      startScroll = { left: pane.scrollLeft, top: pane.scrollTop };
-      const box = pane.getBoundingClientRect();
+      startScroll = { left: host.scrollLeft, top: host.scrollTop };
+      const box = host.getBoundingClientRect();
       startMid = {
         x: (event.touches[0].clientX + event.touches[1].clientX) / 2 - box.left,
         y: (event.touches[0].clientY + event.touches[1].clientY) / 2 - box.top,
@@ -329,13 +326,12 @@ export function SoloStudy({
     }
 
     function onMove(event: TouchEvent) {
-      const pane = scroller();
       if (!pinching || event.touches.length !== 2) return;
       event.preventDefault();
       const nextZoom = Math.min(3, Math.max(0.5, startZoom * (distance(event.touches[0], event.touches[1]) / startDist)));
       applyView(nextZoom);
-      pane.scrollLeft = ((startScroll.left + startMid.x) / startZoom) * nextZoom - startMid.x;
-      pane.scrollTop = ((startScroll.top + startMid.y) / startZoom) * nextZoom - startMid.y;
+      host.scrollLeft = ((startScroll.left + startMid.x) / startZoom) * nextZoom - startMid.x;
+      host.scrollTop = ((startScroll.top + startMid.y) / startZoom) * nextZoom - startMid.y;
     }
 
     function onEnd(event: TouchEvent) {
