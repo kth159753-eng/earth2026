@@ -4,12 +4,12 @@ import { ActiveClassControl } from "@/components/ClassIdentity";
 import { ExamWarmCache, PapersKeepAlive } from "@/components/ExamPaperCache";
 import { BrandMark, HeaderIconWell, headerChipClass } from "@/components/ui";
 import { logoutTeacher } from "@/lib/auth";
-import { appHref } from "@/lib/config";
+import { BASE_PATH, appHref } from "@/lib/config";
 import { EXAM_SESSIONS, groupSessionsByYear, warmExamSession, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 
 const TEACHER_NAV = [
   { id: "exam", href: "/exam", kicker: "교실", label: "모의고사", short: "교실" },
@@ -55,14 +55,16 @@ export function TeacherShell({
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
+  const [pickedSession, setPickedSession] = useState<string | null>(null);
   const student = profile.role === "student";
   const NAV = student ? STUDENT_NAV : TEACHER_NAV;
   const section = currentSection(pathname);
-  const sessionId = searchParams.get("session") || sessionFromPath(pathname);
-  const grouped = useMemo(() => groupSessionsByYear(), []);
   const solo = section === "solo";
   const papers = section === "papers";
-  const dockSidebar = desktopOpen && !papers;
+  const pathSession = searchParams.get("session") || sessionFromPath(pathname);
+  const sessionId = papers && pickedSession ? pickedSession : pathSession;
+  const grouped = useMemo(() => groupSessionsByYear(), []);
+  const dockSidebar = desktopOpen;
 
   useEffect(() => {
     try {
@@ -72,6 +74,19 @@ export function TeacherShell({
     } catch {
       /* ignore */
     }
+  }, []);
+
+  useEffect(() => {
+    setPickedSession(null);
+  }, [section]);
+
+  useEffect(() => {
+    function onPop() {
+      const path = window.location.pathname.replace(BASE_PATH, "") || "/";
+      setPickedSession(sessionFromPath(path));
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   function setDesktopSidebar(next: boolean) {
@@ -109,7 +124,7 @@ export function TeacherShell({
       {open ? (
         <button
           type="button"
-          className={cn("fixed inset-0 z-30 bg-black/85", !papers && "lg:hidden")}
+          className={cn("fixed inset-0 z-30 bg-black/85", dockSidebar && "lg:hidden")}
           aria-label="닫기"
           onClick={() => setOpen(false)}
         />
@@ -157,7 +172,14 @@ export function TeacherShell({
                     session={session}
                     active={session.id === sessionId}
                     href={hrefFor(section, session.id)}
-                    onClick={() => setOpen(false)}
+                    soft={papers}
+                    onClick={() => {
+                      if (papers) {
+                        setPickedSession(session.id);
+                        window.history.pushState(null, "", appHref(hrefFor("papers", session.id)));
+                      }
+                      if (window.matchMedia("(max-width: 1023px)").matches) setOpen(false);
+                    }}
                   />
                 ))}
               </div>
@@ -177,14 +199,17 @@ export function TeacherShell({
           <div className="flex flex-wrap items-center gap-1.5 md:flex-nowrap md:gap-2">
             <button
               type="button"
-              onClick={() => (papers ? setOpen((value) => !value) : setDesktopSidebar(!desktopOpen))}
-              className={cn(headerChipClass(open && papers, "ghost"), papers ? "inline-flex" : "hidden lg:inline-flex")}
+              onClick={() => {
+                if (window.matchMedia("(min-width: 1024px)").matches) setDesktopSidebar(!desktopOpen);
+                else setOpen((value) => !value);
+              }}
+              className={cn(headerChipClass(open && !dockSidebar, "ghost"), "inline-flex")}
             >
-              <HeaderIconWell active={open && papers}>
-                <PanelIcon open={papers ? open : desktopOpen} />
+              <HeaderIconWell active={open && !dockSidebar}>
+                <PanelIcon open={dockSidebar ? desktopOpen : open} />
               </HeaderIconWell>
               <span className="md:hidden">회차</span>
-              <NavCopy kicker="회차" label={papers ? (open ? "닫기" : "열기") : desktopOpen ? "접기" : "펼치기"} />
+              <NavCopy kicker="회차" label={desktopOpen ? "접기" : "펼치기"} />
             </button>
             {student ? null : <ActiveClassControl />}
             <button
@@ -345,12 +370,14 @@ function SessionLink({
   session,
   active,
   href,
+  soft = false,
   onClick,
 }: {
   session: ExamSession;
   active: boolean;
   href: string;
-  onClick: () => void;
+  soft?: boolean;
+  onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   const isII = session.subject === "II";
   const official = HIGHLIGHT_MONTHS.has(session.month);
@@ -358,7 +385,12 @@ function SessionLink({
   return (
     <a
       href={appHref(href)}
-      onClick={onClick}
+      onClick={(event) => {
+        if (soft && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+          event.preventDefault();
+        }
+        onClick(event);
+      }}
       onPointerEnter={() => warmExamSession(session)}
       onFocus={() => warmExamSession(session)}
       className={cn(
