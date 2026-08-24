@@ -1,6 +1,7 @@
 "use client";
 
 import { OmrCardSheet } from "@/components/OmrCardSheet";
+import { gradeAnswers, saveClassArchive } from "@/lib/data";
 import { EXAM_SESSIONS, QUESTION_COUNT } from "@/lib/exams";
 import { createClient } from "@/lib/supabase/client";
 import type { OmrMeta } from "@/lib/types";
@@ -57,6 +58,21 @@ export function OmrForm({
       if (submitError) {
         setError("제출에 실패했습니다. 번호와 회차를 확인해 주세요.");
         return;
+      }
+      const graded = gradeAnswers(meta.session_id, answers);
+      try {
+        await saveClassArchive({
+          sessionId: meta.session_id,
+          grade: meta.grade,
+          classNumber: meta.class_number,
+          studentNumber,
+          answers,
+          score: graded.score,
+          total: graded.total,
+          wrongQuestions: graded.wrongQuestions,
+        });
+      } catch {
+        // 제출은 됐으니 보관소 저장 실패는 막지 않습니다.
       }
       setDone(true);
     } catch {

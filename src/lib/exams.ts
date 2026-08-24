@@ -132,6 +132,9 @@ export function examViewerUrls(session: ExamSession) {
     solution: hasLocal ? local.solution : drive.solution,
     paperOpen: hasLocal ? local.paper : drive.paperOpen,
     solutionOpen: hasLocal ? local.solution : drive.solutionOpen,
+    paperLocal: hasLocal ? local.paper : null,
+    paperDrive: drive.paper,
+    solutionDrive: drive.solution,
   };
 }
 

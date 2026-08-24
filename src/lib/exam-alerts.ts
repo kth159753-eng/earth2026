@@ -1,5 +1,6 @@
 let audioCtx: AudioContext | null = null;
 let speaking = false;
+let sirenNodes: { osc: OscillatorNode; stopAt: number }[] = [];
 
 function context() {
   if (typeof window === "undefined") return null;
@@ -27,6 +28,17 @@ export function unlockExamAudio() {
 
 export function stopExamAlerts() {
   speaking = false;
+  const ctx = audioCtx;
+  if (ctx) {
+    for (const node of sirenNodes) {
+      try {
+        node.osc.stop();
+      } catch {
+        /* already stopped */
+      }
+    }
+    sirenNodes = [];
+  }
   if (typeof window !== "undefined" && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
@@ -49,26 +61,27 @@ function waitVoices() {
   });
 }
 
-function pickVoice(kind: "female" | "male") {
+type VoiceKind = "child" | "uncle" | "young";
+
+function pickVoice(kind: VoiceKind) {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
   const all = window.speechSynthesis.getVoices();
   const ko = all.filter((voice) => voice.lang.toLowerCase().startsWith("ko"));
   const pool = ko.length ? ko : all;
   if (!pool.length) return null;
-  if (kind === "female") {
-    return (
-      pool.find((voice) => /female|yuna|heami|sunhi|heami|여|yuna/i.test(voice.name)) ??
-      pool[0]
-    );
-  }
-  return (
-    pool.find((voice) => /male|insoo|jinho|minsu|guy|남/i.test(voice.name)) ??
-    pool.find((voice) => !/female|yuna|heami|sunhi|여/i.test(voice.name)) ??
-    pool[pool.length - 1]
+  const female = pool.filter((voice) =>
+    /female|yuna|heami|sunhi|sora|nari|heami|여|woman|girl|zira|samantha/i.test(voice.name),
   );
+  const male = pool.filter((voice) =>
+    /male|insoo|jinho|minsu|hyung|injoon|guy|남|man|david|mark|james/i.test(voice.name),
+  );
+  if (kind === "uncle") {
+    return male[0] ?? pool.find((voice) => !female.includes(voice)) ?? pool[pool.length - 1];
+  }
+  return female[0] ?? pool[0];
 }
 
-function speak(text: string, kind: "female" | "male") {
+function speak(text: string, kind: VoiceKind) {
   return new Promise<void>((resolve) => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       resolve();
@@ -77,12 +90,15 @@ function speak(text: string, kind: "female" | "male") {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "ko-KR";
     utterance.volume = 1;
-    if (kind === "female") {
-      utterance.pitch = 1.12;
-      utterance.rate = 0.92;
+    if (kind === "child") {
+      utterance.pitch = 1.58;
+      utterance.rate = 0.82;
+    } else if (kind === "uncle") {
+      utterance.pitch = 0.46;
+      utterance.rate = 0.84;
     } else {
-      utterance.pitch = 0.58;
-      utterance.rate = 1.18;
+      utterance.pitch = 1.22;
+      utterance.rate = 1.06;
     }
     const voice = pickVoice(kind);
     if (voice) utterance.voice = voice;
@@ -92,7 +108,7 @@ function speak(text: string, kind: "female" | "male") {
   });
 }
 
-function playSiren(seconds = 3) {
+function playSiren(seconds = 2.2) {
   const ctx = context();
   if (!ctx) return wait(seconds * 1000);
   if (ctx.state === "suspended") void ctx.resume();
@@ -102,42 +118,50 @@ function playSiren(seconds = 3) {
   const gain = ctx.createGain();
   osc.type = "sawtooth";
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.32, now + 0.04);
-  gain.gain.setValueAtTime(0.32, now + seconds - 0.12);
+  gain.gain.exponentialRampToValueAtTime(0.34, now + 0.05);
+  gain.gain.setValueAtTime(0.34, now + seconds - 0.14);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
 
   let t = now;
   while (t < now + seconds) {
-    osc.frequency.setValueAtTime(820, t);
-    osc.frequency.setValueAtTime(560, t + 0.26);
-    t += 0.52;
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.linearRampToValueAtTime(520, t + 0.28);
+    osc.frequency.linearRampToValueAtTime(880, t + 0.56);
+    t += 0.56;
   }
 
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start(now);
   osc.stop(now + seconds);
+  sirenNodes.push({ osc, stopAt: now + seconds });
   return wait(seconds * 1000);
 }
 
-export async function playTenLeftAlert() {
+async function playAlert(run: () => Promise<void>) {
   if (speaking) window.speechSynthesis?.cancel();
   speaking = true;
+  await playSiren(2.1);
+  if (!speaking) return;
   await waitVoices();
   if (!speaking) return;
-  await speak("10분 남았으요", "female");
+  await run();
   speaking = false;
 }
 
+export async function playFifteenLeftAlert() {
+  await playAlert(() => speak("15분 남았어요", "child"));
+}
+
+export async function playTenLeftAlert() {
+  await playAlert(() => speak("10분 남았다네", "uncle"));
+}
+
 export async function playFiveLeftAlert() {
-  if (speaking) window.speechSynthesis?.cancel();
-  speaking = true;
-  await playSiren(3);
-  if (!speaking) return;
-  await waitVoices();
-  for (let index = 0; index < 5; index += 1) {
-    if (!speaking) return;
-    await speak("비상!", "male");
-  }
-  speaking = false;
+  await playAlert(async () => {
+    for (let index = 0; index < 5; index += 1) {
+      if (!speaking) return;
+      await speak("비상", "young");
+    }
+  });
 }

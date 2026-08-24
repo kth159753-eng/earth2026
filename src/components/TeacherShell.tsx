@@ -1,7 +1,7 @@
 "use client";
 
 import { ActiveClassControl } from "@/components/ClassIdentity";
-import { BrandMark, headerChipClass } from "@/components/ui";
+import { BrandMark, HeaderIconWell, headerChipClass } from "@/components/ui";
 import { logoutTeacher } from "@/lib/auth";
 import { EXAM_SESSIONS, groupSessionsByYear, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
@@ -11,17 +11,17 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 const TEACHER_NAV = [
-  { id: "exam", href: "/exam", label: "[교실] 모의고사", short: "교실" },
-  { id: "solo", href: "/solo", label: "[나혼자] 기출학습", short: "나혼자" },
-  { id: "papers", href: "/papers", label: "시험문제 & 정답지", short: "문제" },
-  { id: "admin", href: "/admin", label: "관리자 페이지", short: "관리자" },
-  { id: "vault", href: "/vault", label: "[보관소]", short: "보관소" },
+  { id: "exam", href: "/exam", kicker: "교실", label: "모의고사", short: "교실" },
+  { id: "solo", href: "/solo", kicker: "나혼자", label: "기출학습", short: "나혼자" },
+  { id: "papers", href: "/papers", kicker: "자료", label: "문제·정답", short: "문제" },
+  { id: "admin", href: "/admin", kicker: "관리", label: "관리자", short: "관리자" },
+  { id: "vault", href: "/vault", kicker: "보관", label: "보관소", short: "보관소" },
 ] as const;
 
 const STUDENT_NAV = [
-  { id: "solo", href: "/solo", label: "[나혼자] 기출학습", short: "나혼자" },
-  { id: "papers", href: "/papers", label: "시험문제 & 정답지", short: "문제" },
-  { id: "vault", href: "/vault", label: "[보관소]", short: "보관소" },
+  { id: "solo", href: "/solo", kicker: "나혼자", label: "기출학습", short: "나혼자" },
+  { id: "vault", href: "/vault", kicker: "보관", label: "보관소", short: "보관소" },
+  { id: "papers", href: "/papers", kicker: "자료", label: "문제·정답", short: "문제" },
 ] as const;
 
 function currentSection(pathname: string) {
@@ -88,14 +88,16 @@ export function TeacherShell({
 
   return (
     <div className={cn("min-h-dvh bg-[#141414] text-white", solo && "flex h-dvh flex-col overflow-hidden")}>
-      <div className="sticky top-0 z-40 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent px-[4%] py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
+      <div className="sticky top-0 z-40 flex items-center justify-between bg-[#141414] px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-[4%] lg:hidden">
         <BrandMark compact />
         <button
           type="button"
-          className={headerChipClass(open)}
+          className={headerChipClass(open, "ghost")}
           onClick={() => setOpen((value) => !value)}
         >
-          <PanelIcon open={open} />
+          <HeaderIconWell active={open}>
+            <PanelIcon open={open} />
+          </HeaderIconWell>
           회차
         </button>
       </div>
@@ -166,38 +168,51 @@ export function TeacherShell({
           solo && "flex min-h-0 flex-1 flex-col overflow-hidden",
         )}
       >
-        <header className="sticky top-0 z-20 shrink-0 bg-gradient-to-b from-black/88 to-transparent px-3 py-2 pt-2 sm:px-[4%] sm:py-3 lg:px-3 lg:pt-[max(0.5rem,env(safe-area-inset-top))] xl:pr-[4%]">
-          <div className="flex flex-wrap items-center gap-2">
+        <header className="sticky top-0 z-20 shrink-0 border-b border-white/[0.06] bg-[#141414] px-2 py-1.5 sm:px-3 sm:py-2 lg:px-3 lg:pt-[max(0.5rem,env(safe-area-inset-top))] xl:pr-[4%]">
+          <div className="flex flex-wrap items-center gap-1.5 md:flex-nowrap md:gap-2">
             <button
               type="button"
               onClick={() => setDesktopSidebar(!desktopOpen)}
-              className={cn(headerChipClass(), "hidden lg:inline-flex")}
+              className={cn(headerChipClass(false, "ghost"), "hidden lg:inline-flex")}
             >
-              <PanelIcon open={desktopOpen} />
-              {desktopOpen ? "회차 접기" : "회차"}
+              <HeaderIconWell>
+                <PanelIcon open={desktopOpen} />
+              </HeaderIconWell>
+              <NavCopy kicker="회차" label={desktopOpen ? "접기" : "펼치기"} />
             </button>
             {student ? null : <ActiveClassControl />}
-            <nav className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
+            <button
+              type="button"
+              className={cn(headerChipClass(false, "ghost"), "ml-auto md:order-last md:ml-0")}
+              onClick={logout}
+            >
+              <HeaderIconWell tone="muted">
+                <LogoutIcon />
+              </HeaderIconWell>
+              <span className="hidden sm:inline">로그아웃</span>
+            </button>
+            <nav className="flex min-w-0 basis-full items-center gap-0.5 overflow-x-auto rounded-[7px] border border-white/[0.08] bg-black/40 p-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:basis-auto md:flex-1 md:p-1">
               {NAV.map((item) => {
                 const active = section === item.id;
                 return (
                   <Link
                     key={item.id}
                     href={hrefFor(item.id, sessionId)}
-                    className={headerChipClass(active)}
+                    className={cn(headerChipClass(active), "flex-1 justify-center md:flex-none")}
                   >
-                    <NavIcon id={item.id} />
-                    <span className="sm:hidden">{item.short}</span>
-                    <span className="hidden sm:inline">{item.label}</span>
+                    <HeaderIconWell active={active}>
+                      <NavIcon id={item.id} />
+                    </HeaderIconWell>
+                    <span className="md:hidden">{item.short}</span>
+                    <NavCopy active={active} kicker={item.kicker} label={item.label} />
+                    {active ? (
+                      <span className="absolute top-1.5 bottom-1.5 left-0.5 w-[2px] rounded-full bg-[#e50914] md:top-2 md:bottom-2" />
+                    ) : null}
                   </Link>
                 );
               })}
             </nav>
             <div id="earth-header-timer" className="hidden min-w-0 shrink-0 lg:flex lg:items-center" />
-            <button type="button" className={headerChipClass()} onClick={logout}>
-              <LogoutIcon />
-              <span className="hidden min-[420px]:inline">로그아웃</span>
-            </button>
           </div>
         </header>
         <div
@@ -217,17 +232,49 @@ const HIGHLIGHT_MONTHS = new Set([6, 9, 11]);
 
 function Icon({ children }: { children: ReactNode }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 fill-none stroke-current" aria-hidden>
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 shrink-0 fill-none stroke-current"
+      strokeWidth="1.85"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
       {children}
     </svg>
+  );
+}
+
+function NavCopy({
+  kicker,
+  label,
+  active = false,
+}: {
+  kicker: string;
+  label: string;
+  active?: boolean;
+}) {
+  return (
+    <span className="hidden leading-none md:flex md:flex-col">
+      <span
+        className={cn(
+          "text-[8px] font-extrabold tracking-[0.18em]",
+          active ? "text-[#e50914]" : "text-[#7d7d7d] group-hover:text-[#a8a8a8]",
+        )}
+      >
+        {kicker}
+      </span>
+      <span className="mt-0.5 text-[13px] font-bold">{label}</span>
+    </span>
   );
 }
 
 function PanelIcon({ open }: { open: boolean }) {
   return (
     <Icon>
-      <rect x="4" y="5" width="16" height="14" rx="2" strokeWidth="1.7" />
-      <path d={open ? "M10 5v14" : "M14 5v14"} strokeWidth="1.7" />
+      <rect x="4.2" y="5" width="15.6" height="14" rx="2.2" />
+      <path d={open ? "M10 5v14" : "M14 5v14"} />
+      <path d={open ? "M12.4 9h5M12.4 12h5M12.4 15h3.4" : "M6.4 9h5M6.4 12h5M6.4 15h3.4"} />
     </Icon>
   );
 }
@@ -236,43 +283,44 @@ function NavIcon({ id }: { id: string }) {
   if (id === "exam") {
     return (
       <Icon>
-        <circle cx="12" cy="12" r="7.2" strokeWidth="1.7" />
-        <path d="M12 8.2v4.1l2.4 1.5" strokeWidth="1.7" strokeLinecap="round" />
+        <circle cx="12" cy="12" r="7.4" />
+        <path d="M12 7.6V12l3.1 1.8" />
+        <path d="M12 4.2v1.3M19.8 12h-1.3" />
       </Icon>
     );
   }
   if (id === "solo") {
     return (
       <Icon>
-        <circle cx="12" cy="9" r="3.1" strokeWidth="1.7" />
-        <path d="M6.4 18.2c.9-3 3-4.5 5.6-4.5s4.7 1.5 5.6 4.5" strokeWidth="1.7" strokeLinecap="round" />
+        <circle cx="12" cy="8.4" r="2.7" />
+        <path d="M6.6 18.2c.7-3.1 2.8-4.7 5.4-4.7s4.7 1.6 5.4 4.7" />
+        <path d="M17.6 7.2c.8.8 1.2 1.8 1.2 3" />
       </Icon>
     );
   }
   if (id === "papers") {
     return (
       <Icon>
-        <path d="M8 4.8h6.2L18 8.6V19.2H8z" strokeWidth="1.7" strokeLinejoin="round" />
-        <path d="M14.1 4.8v3.9H18" strokeWidth="1.7" strokeLinejoin="round" />
+        <path d="M7.2 7.2h8.2v12H7.2z" />
+        <path d="M9.4 4.8h8.2v12" />
+        <path d="M9.4 11h3.8M9.4 13.8h4.6" />
       </Icon>
     );
   }
   if (id === "admin") {
     return (
       <Icon>
-        <circle cx="12" cy="12" r="2.4" strokeWidth="1.7" />
-        <path
-          d="M12 5.2v1.6M12 17.2v1.6M5.2 12h1.6M17.2 12h1.6M7.2 7.2l1.1 1.1M15.7 15.7l1.1 1.1M16.8 7.2l-1.1 1.1M8.3 15.7l-1.1 1.1"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-        />
+        <path d="M5 8.2h14M5 15.8h14" />
+        <circle cx="9.2" cy="8.2" r="1.7" fill="currentColor" />
+        <circle cx="14.8" cy="15.8" r="1.7" fill="currentColor" />
       </Icon>
     );
   }
   return (
     <Icon>
-      <path d="M6.2 8.2h11.6v10H6.2z" strokeWidth="1.7" strokeLinejoin="round" />
-      <path d="M8.4 8.2V6.6h7.2v1.6" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M5 8.4h14l-1.1 10.4H6.1z" />
+      <path d="M4.4 8.4h15.2V6.2H4.4z" />
+      <path d="M10 13h4" />
     </Icon>
   );
 }
@@ -280,8 +328,8 @@ function NavIcon({ id }: { id: string }) {
 function LogoutIcon() {
   return (
     <Icon>
-      <path d="M10 7.2V6.2A1.4 1.4 0 0 1 11.4 4.8h6.2A1.4 1.4 0 0 1 19 6.2v11.6a1.4 1.4 0 0 1-1.4 1.4h-6.2A1.4 1.4 0 0 1 10 16.8v-1" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M4.8 12H14M11.4 9.2 14.2 12l-2.8 2.8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 7.1V6.3A1.5 1.5 0 0 1 11.5 4.8h6.1A1.5 1.5 0 0 1 19.1 6.3v11.4a1.5 1.5 0 0 1-1.5 1.5h-6.1A1.5 1.5 0 0 1 10 17.7v-.8" />
+      <path d="M4.6 12H14M11.2 9.1 14.1 12l-2.9 2.9" />
     </Icon>
   );
 }

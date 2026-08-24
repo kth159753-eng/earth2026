@@ -1,4 +1,4 @@
-import { DEFAULT_SESSION_ID, EXAM_SESSIONS, defaultPoints, emptyAnswers } from "@/lib/exams";
+import { DEFAULT_SESSION_ID, EXAM_SESSIONS, QUESTION_COUNT, defaultPoints, emptyAnswers } from "@/lib/exams";
 import { bandFromScore, defaultGradeCuts } from "@/lib/grades";
 import {
   isCompleteAnswers,
@@ -16,6 +16,7 @@ import type {
   ReportStudent,
   ScoreReport,
   SoloArchive,
+  StudentPaper,
   Submission,
   UserRole,
 } from "@/lib/types";
@@ -317,6 +318,7 @@ export async function getTeacherScoreReport(configs: ClassConfig[]): Promise<Sco
     studentNumber: number;
     score: number | null;
     submitted: boolean;
+    wrongQuestions: number[];
   };
   const raw = new Map<string, Raw>();
   const put = (next: Raw, prefer = false) => {
@@ -342,6 +344,7 @@ export async function getTeacherScoreReport(configs: ClassConfig[]): Promise<Sco
         studentNumber: row.student_number,
         score: row.score,
         submitted: true,
+        wrongQuestions: row.wrong_questions ?? [],
       },
       true,
     );
@@ -354,6 +357,7 @@ export async function getTeacherScoreReport(configs: ClassConfig[]): Promise<Sco
       studentNumber: row.student_number,
       score: row.score,
       submitted: true,
+      wrongQuestions: row.wrong_questions ?? [],
     });
   }
 
@@ -384,6 +388,7 @@ export async function getTeacherScoreReport(configs: ClassConfig[]): Promise<Sco
           score: cell.score,
           band: bandFromScore(cell.score, cuts),
           submitted: cell.submitted,
+          wrongQuestions: cell.wrongQuestions,
         };
       }
       return {
@@ -543,4 +548,92 @@ export async function deleteSoloArchive(id: string) {
   if (!user) return;
   const supabase = createClient();
   await supabase.from("solo_archives").delete().eq("id", id).eq("teacher_id", user.id);
+}
+
+const CLASS_VAULT_KEY = "earth-class-vault";
+
+function readClassVault(): SoloArchive[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CLASS_VAULT_KEY) || "[]") as SoloArchive[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeClassVault(rows: SoloArchive[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(CLASS_VAULT_KEY, JSON.stringify(rows.slice(0, 200)));
+}
+
+function sameStudentPaper(a: SoloArchive, b: Pick<SoloArchive, "session_id" | "grade" | "class_number" | "student_number">) {
+  return (
+    a.session_id === b.session_id &&
+    a.grade === b.grade &&
+    a.class_number === b.class_number &&
+    a.student_number === b.student_number
+  );
+}
+
+export function gradeAnswers(sessionId: string, answers: number[]) {
+  const key = officialAnswers(sessionId);
+  const points = defaultPoints();
+  const total = points.reduce((sum, value) => sum + value, 0);
+  if (!key) {
+    return { score: 0, total, wrongQuestions: [] as number[], graded: false };
+  }
+  const wrongQuestions: number[] = [];
+  let score = 0;
+  for (let index = 0; index < QUESTION_COUNT; index += 1) {
+    if (answers[index] === key[index]) score += points[index] ?? 2;
+    else wrongQuestions.push(index + 1);
+  }
+  return { score, total, wrongQuestions, graded: true };
+}
+
+export async function saveClassArchive(input: {
+  sessionId: string;
+  grade: number;
+  classNumber: number;
+  studentNumber: number;
+  answers: number[];
+  score: number;
+  total: number;
+  wrongQuestions: number[];
+}): Promise<SoloArchive> {
+  const row: SoloArchive = {
+    id: `class-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    teacher_id: "",
+    session_id: input.sessionId,
+    grade: input.grade,
+    class_number: input.classNumber,
+    student_number: input.studentNumber,
+    answers: input.answers,
+    score: input.score,
+    total: input.total,
+    wrong_questions: input.wrongQuestions,
+    graded_at: new Date().toISOString(),
+  };
+  const next = [
+    row,
+    ...readClassVault().filter((item) => !sameStudentPaper(item, row)),
+  ];
+  writeClassVault(next);
+  return row;
+}
+
+export async function listClassArchives(): Promise<SoloArchive[]> {
+  return readClassVault().sort((a, b) => b.graded_at.localeCompare(a.graded_at));
+}
+
+export async function listStudentPapers(): Promise<{
+  classroom: StudentPaper[];
+  solo: StudentPaper[];
+}> {
+  const [classroom, solo] = await Promise.all([listClassArchives(), listSoloArchives()]);
+  return {
+    classroom: classroom.map((row) => ({ ...row, source: "class" as const })),
+    solo: solo.map((row) => ({ ...row, source: "solo" as const })),
+  };
 }

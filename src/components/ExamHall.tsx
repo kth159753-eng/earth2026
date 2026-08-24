@@ -7,6 +7,7 @@ import { siblingSession, type ExamSession } from "@/lib/exams";
 import type { ClassConfig } from "@/lib/types";
 import { omrUrl as buildOmrUrl } from "@/lib/config";
 import {
+  playFifteenLeftAlert,
   playFiveLeftAlert,
   playTenLeftAlert,
   stopExamAlerts,
@@ -131,6 +132,7 @@ export function ExamHall({ session, classes }: Props) {
   const [omrUrl, setOmrUrl] = useState("");
   const endAt = useRef<number | null>(null);
   const alertPrev = useRef(30 * 60);
+  const fired15 = useRef(false);
   const fired10 = useRef(false);
   const fired5 = useRef(false);
 
@@ -258,6 +260,7 @@ export function ExamHall({ session, classes }: Props) {
     setAlarm(false);
     setRunning(false);
     endAt.current = null;
+    fired15.current = false;
     fired10.current = false;
     fired5.current = false;
     alertPrev.current = next;
@@ -321,6 +324,10 @@ export function ExamHall({ session, classes }: Props) {
     }
     const prev = alertPrev.current;
     alertPrev.current = remaining;
+    if (!fired15.current && remaining > 0 && (remaining === 900 || (prev > 900 && remaining <= 900))) {
+      fired15.current = true;
+      void playFifteenLeftAlert();
+    }
     if (!fired10.current && remaining > 0 && (remaining === 600 || (prev > 600 && remaining <= 600))) {
       fired10.current = true;
       void playTenLeftAlert();
@@ -348,10 +355,10 @@ export function ExamHall({ session, classes }: Props) {
       <div className="starfield" />
       <div className="vignette" />
 
-      <div className="relative mx-auto flex min-h-0 w-full max-w-[1760px] flex-1 flex-col gap-3 px-3 py-3 sm:gap-4 sm:px-[3%] sm:py-4">
-        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="relative mx-auto flex min-h-0 w-full max-w-[1760px] flex-1 flex-col gap-2 px-2 py-2 sm:gap-4 sm:px-[3%] sm:py-4">
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
           <div className="min-w-0">
-            <h1 className="text-[22px] font-bold leading-tight text-white sm:text-[28px]">
+            <h1 className="text-[20px] font-bold leading-tight text-white sm:text-[24px] md:text-[28px]">
               {session.label}
             </h1>
             <p className="mt-1 text-sm text-[#d0d0d0] sm:text-base">
@@ -361,7 +368,7 @@ export function ExamHall({ session, classes }: Props) {
           <button
             type="button"
             onClick={toggleImmersive}
-            className="h-12 w-full shrink-0 rounded-[4px] bg-[#e50914] px-5 text-sm font-bold text-white hover:bg-[#c00710] sm:w-auto"
+            className="h-11 w-full shrink-0 rounded-[4px] bg-[#e50914] px-5 text-sm font-bold text-white hover:bg-[#c00710] sm:h-12 sm:w-auto"
           >
             몰입 모드
           </button>
@@ -370,7 +377,7 @@ export function ExamHall({ session, classes }: Props) {
         <div className="grid min-h-0 flex-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.52fr)] xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.5fr)]">
           <section
             className={cn(
-              "relative flex min-h-[38dvh] flex-col justify-center overflow-hidden rounded-[4px] bg-black px-3 py-5 text-center sm:min-h-[46dvh] sm:px-6 sm:py-7 lg:h-full lg:min-h-0 lg:px-8 lg:py-8",
+              "relative flex min-h-[32dvh] flex-col justify-center overflow-hidden rounded-[4px] bg-black px-3 py-4 text-center sm:min-h-[42dvh] sm:px-6 sm:py-7 lg:h-full lg:min-h-0 lg:px-8 lg:py-8",
               alarm && "alarm-flash",
             )}
           >

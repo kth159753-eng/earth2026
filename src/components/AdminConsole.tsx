@@ -50,34 +50,35 @@ export function AdminConsole({
   const [tab, setTab] = useState<Tab>("report");
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-5">
-      <h1 className="text-[28px] font-bold leading-tight tracking-[-0.03em] sm:text-[36px] lg:text-[40px]">
+    <div className="relative z-0 mx-auto w-full max-w-7xl px-3 py-3 sm:px-5 sm:py-5">
+      <h1 className="max-w-full truncate text-[22px] font-bold leading-tight tracking-[-0.03em] sm:text-[28px] md:text-[32px]">
         {sessionLabel}
       </h1>
-      <p className="mt-1 text-sm text-stone-400">
+      <p className="mt-1.5 text-sm leading-5 text-stone-400 sm:mt-2 sm:leading-6">
         회차별 성적 보고서, 채점, 학급 설정, 정답·배점을 한 화면에서 관리합니다.
       </p>
 
-      <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      <div className="-mx-3 mt-4 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-5 sm:flex-wrap sm:overflow-visible sm:px-0">
         {(
           [
-            ["report", "관리자 페이지"],
-            ["omr", "채점하기"],
-            ["compare", "학년 · 학급 비교"],
-            ["classes", "학년 · 학급 설정"],
-            ["answers", "정답 · 배점"],
+            ["report", "보고서", "관리자 페이지"],
+            ["omr", "채점", "채점하기"],
+            ["compare", "비교", "학년 · 학급 비교"],
+            ["classes", "학급", "학년 · 학급 설정"],
+            ["answers", "정답", "정답 · 배점"],
           ] as const
-        ).map(([id, label]) => (
+        ).map(([id, short, label]) => (
           <button
             key={id}
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "min-h-11 rounded-[4px] px-2.5 py-2 text-[13px] sm:px-4 sm:text-sm",
+              "h-10 shrink-0 rounded-[4px] px-3 text-[13px] sm:min-h-11 sm:px-4 sm:text-sm",
               tab === id ? "bg-[#e50914] text-white" : "bg-white/5 text-stone-300",
             )}
           >
-            {label}
+            <span className="sm:hidden">{short}</span>
+            <span className="hidden sm:inline">{label}</span>
           </button>
         ))}
       </div>
@@ -227,10 +228,6 @@ function ClassSettings({
 
   return (
     <section className="rounded-[4px] border border-white/8 bg-[#1f1f1f] p-4 sm:p-5">
-      <SectionTitle title="학년 · 학급 · 학생 수" />
-      <p className="mb-4 text-sm text-[#808080]">
-        학급 수를 정한 뒤 반 번호를 바꿀 수 있습니다. 예: 5개 반을 3, 4, 5, 6, 7반으로.
-      </p>
       <div className="flex flex-wrap gap-2">
         {[1, 2, 3].map((grade) => (
           <button

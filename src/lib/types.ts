@@ -72,6 +72,7 @@ export type ReportCell = {
   score: number | null;
   band: number | null;
   submitted: boolean;
+  wrongQuestions: number[];
 };
 
 export type ReportStudent = {
@@ -86,6 +87,8 @@ export type ScoreReport = {
   sessionIds: string[];
 };
 
+export type ReportSource = "class" | "solo";
+
 export type SoloArchive = {
   id: string;
   teacher_id: string;
@@ -98,4 +101,8 @@ export type SoloArchive = {
   total: number;
   wrong_questions: number[];
   graded_at: string;
+};
+
+export type StudentPaper = SoloArchive & {
+  source: ReportSource;
 };

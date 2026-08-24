@@ -63,7 +63,10 @@ export function SoloStudy({
 }) {
   const router = useRouter();
   const files = useMemo(() => examViewerUrls(session), [session]);
-  const paperSrc = files.paper && !files.paper.includes("drive.google.com") ? files.paper : null;
+  const paperSrc = files.paperLocal ?? (files.paper && !files.paper.includes("drive.google.com") ? files.paper : null);
+  const driveSrc = files.paperDrive;
+  const [paperFailed, setPaperFailed] = useState(false);
+  const onPaperError = useCallback(() => setPaperFailed(true), []);
   const [tool, setTool] = useState<SoloTool>("pen");
   const [color, setColor] = useState<(typeof COLORS)[number]["value"]>(COLORS[0].value);
   const [omrOpen, setOmrOpen] = useState(false);
@@ -71,6 +74,7 @@ export function SoloStudy({
   const [wide, setWide] = useState(false);
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [focusQuestion, setFocusQuestion] = useState<number | null>(null);
   const paperPane = useRef<HTMLDivElement>(null);
   const [grade, setGrade] = useState(initialGrade ?? 3);
   const [classNumber, setClassNumber] = useState(initialClass ?? 1);
@@ -119,6 +123,8 @@ export function SoloStudy({
   }
 
   useEffect(() => {
+    setPaperFailed(false);
+    setFocusQuestion(null);
     try {
       const raw = localStorage.getItem(storageKey(session.id));
       if (!raw) {
@@ -201,6 +207,21 @@ export function SoloStudy({
     }
     nodes.forEach((node) => document.head.appendChild(node));
     return () => nodes.forEach((node) => node.remove());
+  }, [paperSrc]);
+
+  useEffect(() => {
+    if (!paperSrc) return;
+    let cancelled = false;
+    fetch(paperSrc, { method: "HEAD" })
+      .then((response) => {
+        if (!cancelled && response.status === 404) setPaperFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setPaperFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [paperSrc]);
 
   useEffect(() => {
@@ -335,6 +356,16 @@ export function SoloStudy({
     });
   }
 
+  function focusItem(question: number | null) {
+    setFocusQuestion(question);
+    if (question) {
+      setCurrent(question - 1);
+      setZoom((current) => (current < 1.5 ? 1.5 : current));
+    } else {
+      setZoom(1);
+    }
+  }
+
   function bumpZoom(direction: 1 | -1) {
     setZoom((current) => {
       const index = ZOOM_STEPS.reduce((best, step, stepIndex) => {
@@ -372,7 +403,6 @@ export function SoloStudy({
     const total = points.reduce((sum, value) => sum + value, 0);
     setMessage("");
     setResult({ score, total, wrong });
-    if (guest) return;
     setSaving(true);
     try {
       await saveSoloArchive({
@@ -385,9 +415,9 @@ export function SoloStudy({
         total,
         wrongQuestions: wrong,
       });
-      router.push("/vault/");
+      if (!guest) router.push("/vault/");
     } catch {
-      setMessage("채점은 끝났습니다. 보관소 이동에 실패했습니다.");
+      setMessage("채점은 끝났습니다. 보관소 저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -608,12 +638,40 @@ export function SoloStudy({
           </div>
           {topBar ? null : omrButton}
         </div>
+        <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+          <span className="shrink-0 pr-1 text-[10px] font-extrabold tracking-[0.14em] text-[#808080]">
+            문항 확대
+          </span>
+          <button
+            type="button"
+            onClick={() => focusItem(null)}
+            className={cn(
+              "h-8 shrink-0 rounded-[4px] px-2 text-[11px] font-bold",
+              focusQuestion == null ? "bg-white text-black" : "bg-white/10 text-white",
+            )}
+          >
+            전체
+          </button>
+          {Array.from({ length: QUESTION_COUNT }, (_, index) => index + 1).map((question) => (
+            <button
+              key={question}
+              type="button"
+              onClick={() => focusItem(question)}
+              className={cn(
+                "grid h-8 w-8 shrink-0 place-items-center rounded-[4px] text-[12px] font-bold",
+                focusQuestion === question ? "bg-[#e50914] text-white" : "bg-white/10 text-[#d0d0d0]",
+              )}
+            >
+              {question}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="relative min-h-0 flex-1">
         <div ref={paperPane} className="absolute inset-0 overflow-auto">
-          <div className="flex min-h-full min-w-full justify-safe-center px-2 py-3 sm:px-4 sm:py-4">
-            {paperSrc ? (
+          {paperSrc && !paperFailed ? (
+            <div className="flex min-h-full min-w-full justify-safe-center px-2 py-3 sm:px-4 sm:py-4">
               <SoloPaper
                 src={paperSrc}
                 tool={tool}
@@ -622,11 +680,21 @@ export function SoloStudy({
                 onStrokes={setStrokes}
                 onMark={markFromPaper}
                 zoom={zoom}
+                focusQuestion={focusQuestion}
+                onError={onPaperError}
               />
-            ) : (
-              <p className="py-24 text-center text-sm text-[#808080]">이 회차 시험지가 없습니다.</p>
-            )}
-          </div>
+            </div>
+          ) : driveSrc ? (
+            <iframe
+              title={`${session.label} 시험지`}
+              src={driveSrc}
+              className="h-full min-h-full w-full border-0 bg-white"
+              allow="autoplay; fullscreen"
+              allowFullScreen
+            />
+          ) : (
+            <p className="py-24 text-center text-sm text-[#808080]">이 회차 시험지가 없습니다.</p>
+          )}
         </div>
         {omrDesktop ? (
           <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-[260px] lg:block xl:inset-y-3 xl:right-3 xl:w-[300px]">

@@ -1,5 +1,5 @@
-import { VaultBoard } from "@/components/VaultBoard";
+import { StudentReport } from "@/components/StudentReport";
 
 export default function VaultPage() {
-  return <VaultBoard />;
+  return <StudentReport />;
 }

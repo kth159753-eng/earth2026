@@ -22,7 +22,11 @@ const pdfDocs = new Map<string, Promise<PdfDoc>>();
 function loadPdfjs() {
   if (!pdfjsLoader) {
     pdfjsLoader = import("pdfjs-dist").then((pdfjs) => {
-      pdfjs.GlobalWorkerOptions.workerSrc = `${BASE_PATH}/pdf.worker.min.mjs`;
+      const localWorker = `${BASE_PATH}/pdf.worker.min.mjs`;
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        typeof window === "undefined"
+          ? localWorker
+          : `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
       return pdfjs;
     });
   }
@@ -86,14 +90,17 @@ type Props = {
   onStrokes: (next: InkStroke[] | ((current: InkStroke[]) => InkStroke[])) => void;
   onMark: (choice: number, question?: number) => void;
   zoom?: number;
+  onError?: () => void;
+  focusQuestion?: number | null;
 };
 
 type PageSize = { width: number; height: number };
 
 const EMPTY_STROKES: InkStroke[] = [];
 
-export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom = 1 }: Props) {
+export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom = 1, onError, focusQuestion = null }: Props) {
   const measureRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [maps, setMaps] = useState<PageOmrMap[]>([]);
@@ -185,7 +192,11 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
           if (index < document.numPages) await yieldPaint();
         }
       } catch {
-        if (!cancelled) setError("시험지를 불러오지 못했습니다.");
+        pdfDocs.delete(src);
+        if (!cancelled) {
+          setError("시험지를 불러오지 못했습니다.");
+          onError?.();
+        }
       }
     }
 
@@ -193,7 +204,18 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
     return () => {
       cancelled = true;
     };
-  }, [src, baseWidth, renderWidth]);
+  }, [src, baseWidth, renderWidth, onError]);
+
+  useEffect(() => {
+    if (!focusQuestion) return;
+    const pageIndex = maps.findIndex((map) =>
+      map.questions.some((band) => band.question === focusQuestion - 1),
+    );
+    const target = pageIndex >= 0 ? pageIndex : Math.max(0, Math.min(pages.length - 1, Math.floor((focusQuestion - 1) / 5)));
+    const node = pageRefs.current[target];
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusQuestion, maps, pages.length]);
 
   const strokesByPage = useMemo(() => {
     const grouped = new Map<number, InkStroke[]>();
@@ -218,6 +240,9 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
       {pages.map((page, index) => (
         <PaperPage
           key={`${src}-${index}`}
+          pageRef={(node) => {
+            pageRefs.current[index] = node;
+          }}
           pageIndex={index}
           bitmap={page}
           size={sizes[index]}
@@ -228,6 +253,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
           onMark={onMark}
           pageCount={pages.length}
           omrMap={maps[index]}
+          focusQuestion={focusQuestion}
         />
       ))}
     </div>
@@ -236,6 +262,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
 }
 
 const PaperPage = memo(function PaperPage({
+  pageRef,
   pageIndex,
   bitmap,
   size,
@@ -246,7 +273,9 @@ const PaperPage = memo(function PaperPage({
   onMark,
   pageCount,
   omrMap,
+  focusQuestion,
 }: {
+  pageRef?: (node: HTMLDivElement | null) => void;
   pageIndex: number;
   bitmap: HTMLCanvasElement;
   size?: PageSize;
@@ -257,8 +286,10 @@ const PaperPage = memo(function PaperPage({
   onMark: (choice: number, question?: number) => void;
   pageCount: number;
   omrMap?: PageOmrMap;
+  focusQuestion?: number | null;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
+  const band = omrMap?.questions.find((item) => item.question === (focusQuestion ?? 0) - 1);
   const inkRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef<InkStroke | null>(null);
   const drawingId = useRef<number | null>(null);
@@ -404,10 +435,22 @@ const PaperPage = memo(function PaperPage({
 
   return (
     <div
+      ref={pageRef}
       className="relative mx-auto w-full overflow-hidden rounded-[2px] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
       style={{ contentVisibility: "auto", containIntrinsicSize: "auto 1200px" }}
     >
       <div ref={frameRef} />
+      {band ? (
+        <div
+          className="pointer-events-none absolute rounded-[4px] border-2 border-[#e50914] bg-[#e50914]/8"
+          style={{
+            left: `${band.x0 * 100}%`,
+            top: `${band.y0 * 100}%`,
+            width: `${(band.x1 - band.x0) * 100}%`,
+            height: `${(band.y1 - band.y0) * 100}%`,
+          }}
+        />
+      ) : null}
       <canvas
         ref={inkRef}
         className={cn(

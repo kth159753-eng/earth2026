@@ -2,11 +2,13 @@
 
 import { OmrForm } from "@/components/OmrForm";
 import { ScanMenu } from "@/components/ScanMenu";
+import { StudentReport } from "@/components/StudentReport";
+import { StudentTabs, type StudentTabId } from "@/components/StudentTabs";
 import { isSupabaseConfigured } from "@/lib/config";
 import { getSession } from "@/lib/exams";
 import { createClient } from "@/lib/supabase/client";
 import type { OmrMeta } from "@/lib/types";
-import { gradeLabel, classLabel } from "@/lib/utils";
+import { classLabel, gradeLabel } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -19,7 +21,6 @@ const SoloStudy = dynamic(
   },
 );
 
-type Mode = "omr" | "solo";
 type Side = "main" | "pair";
 
 function OmrInner() {
@@ -29,7 +30,7 @@ function OmrInner() {
   const [meta, setMeta] = useState<OmrMeta | null>(null);
   const [pairMeta, setPairMeta] = useState<OmrMeta | null>(null);
   const [pairReady, setPairReady] = useState(!pair);
-  const [mode, setMode] = useState<Mode | null>(null);
+  const [tab, setTab] = useState<StudentTabId | null>(null);
   const [picked, setPicked] = useState<Side | null>(null);
   const [error, setError] = useState("");
 
@@ -80,47 +81,9 @@ function OmrInner() {
     ? `${mainSession.year}년 ${mainSession.month}월 · ${classLine}`
     : classLine;
 
-  if (!mode) {
-    return (
-      <ScanMenu
-        title="무엇을 할까요?"
-        subtitle={examLine}
-        choices={[
-          {
-            id: "omr",
-            title: "OMR 입력",
-            hint: "교실에서 답을 제출합니다.",
-          },
-          {
-            id: "solo",
-            title: "[나혼자] 기출학습",
-            hint: "시험지를 풀고 바로 채점합니다.",
-          },
-        ]}
-        onPick={(id) => setMode(id as Mode)}
-      />
-    );
-  }
-
-  if (canPick && !picked) {
-    const options = [
-      { key: "main" as const, session: mainSession! },
-      { key: "pair" as const, session: pairSession! },
-    ].sort((a, b) => a.session.subject.localeCompare(b.session.subject));
-
-    return (
-      <ScanMenu
-        title="과목을 선택하세요"
-        subtitle={examLine}
-        choices={options.map((item) => ({
-          id: item.key,
-          title: item.session.subject === "I" ? "지I" : "지II",
-          hint: item.session.label,
-        }))}
-        onPick={(id) => setPicked(id as Side)}
-        onBack={() => setMode(null)}
-      />
-    );
+  function changeTab(next: StudentTabId) {
+    setTab(next);
+    setPicked(null);
   }
 
   const active =
@@ -128,40 +91,61 @@ function OmrInner() {
       ? { code: pair, meta: pairMeta, session: pairSession }
       : { code, meta, session: mainSession };
 
-  if (!active.session) {
-    return (
-      <main className="grid min-h-dvh place-items-center px-6 text-center">
-        <p className="text-stone-400">회차 정보를 찾지 못했습니다.</p>
-      </main>
-    );
-  }
-
-  if (mode === "solo") {
-    return (
-      <div className="flex h-dvh flex-col overflow-hidden">
-        <SoloStudy
-          session={active.session}
-          guest
-          initialGrade={active.meta.grade}
-          initialClass={active.meta.class_number}
-          onBack={() => {
-            setPicked(null);
-            setMode(null);
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
-    <OmrForm
-      code={active.code}
-      meta={active.meta}
-      onBack={() => {
-        setPicked(null);
-        setMode(null);
-      }}
-    />
+    <div className="flex h-dvh flex-col overflow-hidden bg-[#141414]">
+      <StudentTabs active={tab} onChange={changeTab} />
+      <div className={`min-h-0 flex-1 ${tab === "solo" ? "overflow-hidden" : "overflow-auto"}`}>
+        {!tab ? (
+          <ScanMenu
+            title="무엇을 할까요?"
+            subtitle={examLine}
+            choices={[
+              { id: "omr", title: "OMR 입력", hint: "교실에서 답을 제출합니다." },
+              { id: "solo", title: "[나혼자] 기출학습", hint: "시험지를 풀고 바로 채점합니다." },
+              {
+                id: "report",
+                title: "보관소",
+                hint: "수업시간 보고서와 나혼자 학습 보고서를 나눠 봅니다.",
+              },
+            ]}
+            onPick={(id) => setTab(id as StudentTabId)}
+          />
+        ) : tab === "report" ? (
+          <StudentReport />
+        ) : canPick && !picked ? (
+          <ScanMenu
+            title="과목을 선택하세요"
+            subtitle={examLine}
+            choices={[
+              { key: "main" as const, session: mainSession! },
+              { key: "pair" as const, session: pairSession! },
+            ]
+              .sort((a, b) => a.session.subject.localeCompare(b.session.subject))
+              .map((item) => ({
+                id: item.key,
+                title: item.session.subject === "I" ? "지I" : "지II",
+                hint: item.session.label,
+              }))}
+            onPick={(id) => setPicked(id as Side)}
+          />
+        ) : !active.session ? (
+          <main className="grid min-h-[50vh] place-items-center px-6 text-center">
+            <p className="text-stone-400">회차 정보를 찾지 못했습니다.</p>
+          </main>
+        ) : tab === "solo" ? (
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <SoloStudy
+              session={active.session}
+              guest
+              initialGrade={active.meta.grade}
+              initialClass={active.meta.class_number}
+            />
+          </div>
+        ) : (
+          <OmrForm code={active.code} meta={active.meta} />
+        )}
+      </div>
+    </div>
   );
 }
 
