@@ -267,29 +267,17 @@ export function warmExamSession(session: ExamSession) {
   if (typeof document === "undefined" || warmedExams.has(session.id)) return;
   warmedExams.add(session.id);
   const files = examViewerUrls(session);
-  for (const href of [files.paper, files.solution]) {
-    if (!href) continue;
-    const link = document.createElement("link");
-    link.rel = "prefetch";
-    link.href = href;
-    document.head.appendChild(link);
-  }
+  const href = files.paperLocal;
+  if (!href) return;
+  const link = document.createElement("link");
+  link.rel = "prefetch";
+  link.as = "fetch";
+  link.href = href;
+  document.head.appendChild(link);
 }
 
 export function warmExamCatalog(start?: ExamSession) {
-  if (typeof window === "undefined") return;
-  const queue = start
-    ? [...nearbyExamSessions(start), ...EXAM_SESSIONS.filter((item) => item.id !== start.id)]
-    : [...EXAM_SESSIONS];
-  let index = 0;
-  const tick = () => {
-    const next = queue[index];
-    index += 1;
-    if (!next) return;
-    warmExamSession(next);
-    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-    if (idle) idle(tick);
-    else window.setTimeout(tick, 180);
-  };
-  tick();
+  if (!start) return;
+  warmExamSession(start);
+  for (const item of nearbyExamSessions(start)) warmExamSession(item);
 }

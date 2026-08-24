@@ -1,15 +1,36 @@
 "use client";
 
 import { ActiveClassControl } from "@/components/ClassIdentity";
-import { ExamWarmCache, PapersKeepAlive } from "@/components/ExamPaperCache";
 import { BrandMark, HeaderIconWell, headerChipClass } from "@/components/ui";
 import { logoutTeacher } from "@/lib/auth";
 import { BASE_PATH, appHref } from "@/lib/config";
 import { EXAM_SESSIONS, groupSessionsByYear, warmExamSession, type ExamSession } from "@/lib/exams";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+
+const SoloKeepAlive = dynamic(
+  () => import("@/components/SoloKeepAlive").then((mod) => ({ default: mod.SoloKeepAlive })),
+  { ssr: false, loading: () => <div className="min-h-0 flex-1 bg-[#0f0f0f]" /> },
+);
+const ExamKeepAlive = dynamic(
+  () => import("@/components/ExamKeepAlive").then((mod) => ({ default: mod.ExamKeepAlive })),
+  { ssr: false, loading: () => <div className="min-h-0 flex-1" /> },
+);
+const PapersKeepAlive = dynamic(
+  () => import("@/components/ExamPaperCache").then((mod) => ({ default: mod.PapersKeepAlive })),
+  { ssr: false, loading: () => <div className="min-h-0 flex-1" /> },
+);
+const AdminHost = dynamic(
+  () => import("@/components/AdminHost").then((mod) => ({ default: mod.AdminHost })),
+  { ssr: false, loading: () => <div className="min-h-[20vh]" /> },
+);
+const StudentReport = dynamic(
+  () => import("@/components/StudentReport").then((mod) => ({ default: mod.StudentReport })),
+  { ssr: false, loading: () => <div className="min-h-[20vh]" /> },
+);
 
 const TEACHER_NAV = [
   { id: "exam", href: "/exam", kicker: "교실", label: "모의고사", short: "교실" },
@@ -55,14 +76,14 @@ export function TeacherShell({
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
-  const [pickedSession, setPickedSession] = useState<string | null>(null);
   const student = profile.role === "student";
   const NAV = student ? STUDENT_NAV : TEACHER_NAV;
-  const section = currentSection(pathname);
+  const [section, setSection] = useState(() => currentSection(pathname));
+  const [sessionId, setSessionId] = useState(
+    () => searchParams.get("session") || sessionFromPath(pathname),
+  );
   const solo = section === "solo";
   const papers = section === "papers";
-  const pathSession = searchParams.get("session") || sessionFromPath(pathname);
-  const sessionId = papers && pickedSession ? pickedSession : pathSession;
   const grouped = useMemo(() => groupSessionsByYear(), []);
   const dockSidebar = desktopOpen;
 
@@ -76,14 +97,29 @@ export function TeacherShell({
     }
   }, []);
 
-  useEffect(() => {
-    setPickedSession(null);
-  }, [section]);
+  function readLocation() {
+    const path = window.location.pathname.replace(BASE_PATH, "") || "/";
+    const query = new URLSearchParams(window.location.search);
+    return {
+      section: currentSection(path),
+      sessionId: query.get("session") || sessionFromPath(path),
+    };
+  }
+
+  function go(nextSection: string, nextSession: string, event?: MouseEvent<HTMLAnchorElement>) {
+    if (event?.metaKey || event?.ctrlKey || event?.shiftKey || event?.altKey) return;
+    event?.preventDefault();
+    setSection(nextSection);
+    setSessionId(nextSession);
+    window.history.pushState(null, "", appHref(hrefFor(nextSection, nextSession)));
+    if (window.matchMedia("(max-width: 1023px)").matches) setOpen(false);
+  }
 
   useEffect(() => {
     function onPop() {
-      const path = window.location.pathname.replace(BASE_PATH, "") || "/";
-      setPickedSession(sessionFromPath(path));
+      const next = readLocation();
+      setSection(next.section);
+      setSessionId(next.sessionId);
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -105,7 +141,7 @@ export function TeacherShell({
 
   return (
     <div className={cn("min-h-dvh bg-[#141414] text-white", (solo || papers) && "flex h-dvh flex-col overflow-hidden")}>
-      {papers ? null : (
+      {solo || papers ? null : (
         <div className="sticky top-0 z-40 flex items-center justify-between bg-[#141414] px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-[4%] lg:hidden">
           <BrandMark compact />
           <button
@@ -172,14 +208,8 @@ export function TeacherShell({
                     session={session}
                     active={session.id === sessionId}
                     href={hrefFor(section, session.id)}
-                    soft={papers}
-                    onClick={() => {
-                      if (papers) {
-                        setPickedSession(session.id);
-                        window.history.pushState(null, "", appHref(hrefFor("papers", session.id)));
-                      }
-                      if (window.matchMedia("(max-width: 1023px)").matches) setOpen(false);
-                    }}
+                    soft
+                    onClick={(event) => go(section, session.id, event)}
                   />
                 ))}
               </div>
@@ -190,13 +220,24 @@ export function TeacherShell({
 
       <div
         className={cn(
-          "transition-[padding] duration-150",
           dockSidebar && "lg:pl-[228px] xl:pl-[236px]",
           (solo || papers) && "flex min-h-0 flex-1 flex-col overflow-hidden",
         )}
       >
-        <header className="sticky top-0 z-20 shrink-0 border-b border-white/[0.06] bg-[#141414] px-2 py-1.5 sm:px-3 sm:py-2 lg:px-3 lg:pt-[max(0.5rem,env(safe-area-inset-top))] xl:pr-[4%]">
-          <div className="flex flex-wrap items-center gap-1.5 md:flex-nowrap md:gap-2">
+        <header
+          className={cn(
+            "sticky top-0 z-20 shrink-0 border-b border-white/[0.06] bg-[#141414] px-2 py-1.5 sm:px-3 sm:py-2 lg:px-3 xl:pr-[4%]",
+            solo || papers
+              ? "pt-[max(0.4rem,env(safe-area-inset-top))] lg:pt-[max(0.5rem,env(safe-area-inset-top))]"
+              : "lg:pt-[max(0.5rem,env(safe-area-inset-top))]",
+          )}
+        >
+          <div
+            className={cn(
+              "flex items-center gap-1.5 md:gap-2",
+              solo || papers ? "flex-nowrap" : "flex-wrap md:flex-nowrap",
+            )}
+          >
             <button
               type="button"
               onClick={() => {
@@ -208,27 +249,32 @@ export function TeacherShell({
               <HeaderIconWell active={open && !dockSidebar}>
                 <PanelIcon open={dockSidebar ? desktopOpen : open} />
               </HeaderIconWell>
-              <span className="md:hidden">회차</span>
+              <span className={cn("md:hidden", (solo || papers) && "sr-only")}>회차</span>
               <NavCopy kicker="회차" label={desktopOpen ? "접기" : "펼치기"} />
             </button>
-            {student ? null : <ActiveClassControl />}
-            <button
-              type="button"
-              className={cn(headerChipClass(false, "ghost"), "ml-auto md:order-last md:ml-0")}
-              onClick={logout}
+            {student ? null : (
+              <div className={cn(solo && "hidden min-[480px]:block")}>
+                <ActiveClassControl />
+              </div>
+            )}
+            <nav
+              className={cn(
+                "flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-[7px] border border-white/[0.08] bg-black/40 p-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:p-1",
+                solo || papers ? "min-w-0 flex-1" : "order-4 basis-full md:order-none md:basis-auto md:flex-1",
+              )}
             >
-              <HeaderIconWell tone="muted">
-                <LogoutIcon />
-              </HeaderIconWell>
-              <span className="hidden sm:inline">로그아웃</span>
-            </button>
-            <nav className="flex min-w-0 basis-full items-center gap-0.5 overflow-x-auto rounded-[7px] border border-white/[0.08] bg-black/40 p-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:basis-auto md:flex-1 md:p-1">
               {NAV.map((item) => {
                 const active = section === item.id;
                 return (
                   <a
                     key={item.id}
                     href={appHref(hrefFor(item.id, sessionId))}
+                    onClick={(event) => go(item.id, sessionId, event)}
+                    onPointerEnter={() => {
+                      if (item.id === "solo") void import("@/components/SoloKeepAlive");
+                      if (item.id === "exam") void import("@/components/ExamKeepAlive");
+                      if (item.id === "admin") void import("@/components/AdminHost");
+                    }}
                     className={cn(headerChipClass(active), "flex-1 justify-center md:flex-none")}
                   >
                     <HeaderIconWell active={active}>
@@ -244,16 +290,47 @@ export function TeacherShell({
               })}
             </nav>
             <div id="earth-header-timer" className="hidden min-w-0 shrink-0 lg:flex lg:items-center lg:justify-end" />
+            <button
+              type="button"
+              className={cn(
+                headerChipClass(false, "ghost"),
+                "shrink-0",
+                !(solo || papers) && "order-3 ml-auto md:order-none md:ml-0",
+              )}
+              onClick={logout}
+            >
+              <HeaderIconWell tone="muted">
+                <LogoutIcon />
+              </HeaderIconWell>
+              <span className="hidden sm:inline">로그아웃</span>
+            </button>
           </div>
         </header>
         <div
           className={cn(
             "flex flex-col pb-[env(safe-area-inset-bottom)]",
-            solo || papers ? "min-h-0 flex-1 overflow-hidden" : "min-h-[calc(100dvh-72px)]",
+            solo || papers
+              ? "relative min-h-0 flex-1 overflow-hidden"
+              : "min-h-[calc(100dvh-8.5rem)] lg:min-h-[calc(100dvh-72px)]",
           )}
         >
-          {papers ? <PapersKeepAlive sessionId={sessionId} /> : children}
-          {solo ? <ExamWarmCache sessionId={sessionId} /> : null}
+          {solo || papers ? (
+            <div className="absolute inset-0 flex flex-col">
+              {section === "papers" ? (
+                <PapersKeepAlive sessionId={sessionId} />
+              ) : (
+                <SoloKeepAlive sessionId={sessionId} />
+              )}
+            </div>
+          ) : section === "exam" ? (
+            <ExamKeepAlive sessionId={sessionId} />
+          ) : section === "admin" ? (
+            <AdminHost sessionId={sessionId} />
+          ) : section === "vault" ? (
+            <StudentReport />
+          ) : (
+            children
+          )}
         </div>
       </div>
     </div>
@@ -394,7 +471,7 @@ function SessionLink({
       onPointerEnter={() => warmExamSession(session)}
       onFocus={() => warmExamSession(session)}
       className={cn(
-        "relative block cursor-pointer rounded-[4px] px-3 py-1.5 transition duration-150",
+        "relative block cursor-pointer rounded-[4px] px-3 py-1.5",
         active
           ? "bg-[#1c1c1c]"
           : "[@media(hover:hover)]:hover:bg-[#161616] active:bg-[#1a1a1a]",

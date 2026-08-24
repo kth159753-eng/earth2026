@@ -45,7 +45,7 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
             type="button"
             onClick={() => setPane(id)}
             className={cn(
-              "h-9 rounded-[4px] text-[13px] font-bold",
+              "h-11 rounded-[4px] text-[13px] font-bold",
               pane === id ? "bg-[#e50914] text-white" : "bg-white/8 text-[#b3b3b3]",
             )}
           >
@@ -134,13 +134,44 @@ function PaperPane({
   useEffect(() => {
     const pane = scroller.current;
     if (!pane) return;
+    const host = pane;
     const onWheel = (event: WheelEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       bumpZoom(event.deltaY < 0 ? 1 : -1);
     };
-    pane.addEventListener("wheel", onWheel, { passive: false });
-    return () => pane.removeEventListener("wheel", onWheel);
+    let pinching = false;
+    let startDist = 1;
+    let startZoom = 1;
+    function distance(a: Touch, b: Touch) {
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    }
+    function onStart(event: TouchEvent) {
+      if (event.touches.length !== 2) return;
+      pinching = true;
+      startDist = distance(event.touches[0], event.touches[1]) || 1;
+      startZoom = zoomRef.current;
+    }
+    function onMove(event: TouchEvent) {
+      if (!pinching || event.touches.length !== 2) return;
+      event.preventDefault();
+      applyZoom(startZoom * (distance(event.touches[0], event.touches[1]) / startDist));
+    }
+    function onEnd(event: TouchEvent) {
+      if (event.touches.length < 2) pinching = false;
+    }
+    host.addEventListener("wheel", onWheel, { passive: false });
+    host.addEventListener("touchstart", onStart, { passive: true });
+    host.addEventListener("touchmove", onMove, { passive: false });
+    host.addEventListener("touchend", onEnd);
+    host.addEventListener("touchcancel", onEnd);
+    return () => {
+      host.removeEventListener("wheel", onWheel);
+      host.removeEventListener("touchstart", onStart);
+      host.removeEventListener("touchmove", onMove);
+      host.removeEventListener("touchend", onEnd);
+      host.removeEventListener("touchcancel", onEnd);
+    };
   }, []);
 
   return (
@@ -155,7 +186,7 @@ function PaperPane({
               aria-label={`${title} 축소`}
               onClick={() => bumpZoom(-1)}
               disabled={zoom <= ZOOM_STEPS[0]}
-              className="grid h-8 w-8 place-items-center text-white disabled:opacity-35"
+              className="grid h-11 w-11 place-items-center text-white disabled:opacity-35 sm:h-8 sm:w-8"
             >
               <ZoomIcon minus />
             </button>
@@ -173,7 +204,7 @@ function PaperPane({
               aria-label={`${title} 확대`}
               onClick={() => bumpZoom(1)}
               disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]}
-              className="grid h-8 w-8 place-items-center text-white disabled:opacity-35"
+              className="grid h-11 w-11 place-items-center text-white disabled:opacity-35 sm:h-8 sm:w-8"
             >
               <ZoomIcon />
             </button>

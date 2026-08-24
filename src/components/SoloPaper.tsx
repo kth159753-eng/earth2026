@@ -19,32 +19,49 @@ type PdfDoc = Awaited<ReturnType<Pdfjs["getDocument"]>["promise"]>;
 let pdfjsLoader: Promise<Pdfjs> | null = null;
 const pdfDocs = new Map<string, Promise<PdfDoc>>();
 
+function workerUrls(version: string) {
+  return [
+    `${BASE_PATH}/pdf.worker.min.mjs`,
+    `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`,
+  ];
+}
+
 function loadPdfjs() {
   if (!pdfjsLoader) {
     pdfjsLoader = import("pdfjs-dist").then((pdfjs) => {
-      const localWorker = `${BASE_PATH}/pdf.worker.min.mjs`;
-      pdfjs.GlobalWorkerOptions.workerSrc =
-        typeof window === "undefined"
-          ? localWorker
-          : `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+      pdfjs.GlobalWorkerOptions.workerSrc = workerUrls(pdfjs.version)[0];
       return pdfjs;
     });
   }
   return pdfjsLoader;
 }
 
+if (typeof window !== "undefined") void loadPdfjs();
+
+async function openPdf(src: string) {
+  const pdfjs = await loadPdfjs();
+  const options = {
+    url: src,
+    disableStream: true,
+    disableRange: true,
+    disableAutoFetch: false,
+    withCredentials: false,
+  };
+  try {
+    return await pdfjs.getDocument(options).promise;
+  } catch {
+    pdfjs.GlobalWorkerOptions.workerSrc = workerUrls(pdfjs.version)[1];
+    return pdfjs.getDocument(options).promise;
+  }
+}
+
 function loadPdf(src: string) {
   const cached = pdfDocs.get(src);
   if (cached) return cached;
-  const pending = loadPdfjs().then((pdfjs) =>
-    pdfjs.getDocument({
-      url: src,
-      disableStream: true,
-      disableRange: true,
-      disableAutoFetch: false,
-      withCredentials: false,
-    }).promise,
-  );
+  const pending = openPdf(src).catch((error) => {
+    pdfDocs.delete(src);
+    throw error;
+  });
   pdfDocs.set(src, pending);
   return pending;
 }
@@ -93,21 +110,22 @@ type Props = {
   zoom?: number;
   onError?: () => void;
   focusQuestion?: number | null;
+  fingerScroll?: boolean;
 };
 
 type PageSize = { width: number; height: number };
 
 const EMPTY_STROKES: InkStroke[] = [];
 
-export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom = 1, onError, focusQuestion = null }: Props) {
+export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom = 1, onError, focusQuestion = null, fingerScroll = false }: Props) {
   const measureRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [maps, setMaps] = useState<PageOmrMap[]>([]);
   const [error, setError] = useState("");
-  const [baseWidth, setBaseWidth] = useState(0);
-  const widthRef = useRef(0);
+  const [baseWidth, setBaseWidth] = useState(720);
+  const widthRef = useRef(720);
 
   useEffect(() => {
     setPages([]);
@@ -122,13 +140,13 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
     let timer = 0;
     const apply = (width: number) => {
       if (width <= 0) return;
-      if (Math.abs(width - widthRef.current) < 24 && widthRef.current) return;
+      if (Math.abs(width - widthRef.current) < 80 && widthRef.current) return;
       widthRef.current = width;
       setBaseWidth(width);
     };
     const update = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => apply(Math.floor(host.clientWidth)), 220);
+      timer = window.setTimeout(() => apply(Math.floor(host.clientWidth)), 480);
     };
     apply(Math.floor(host.clientWidth));
     const observer = new ResizeObserver(update);
@@ -142,8 +160,10 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
   const renderWidth = Math.min(baseWidth || 860, 860);
 
   useEffect(() => {
-    if (!baseWidth) return;
     let cancelled = false;
+    const watchdog = window.setTimeout(() => {
+      if (!cancelled) onError?.();
+    }, 10000);
     const pixelWidth = bitmapWidth(renderWidth);
     const coarse =
       typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -165,16 +185,18 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
           canvas.height = Math.floor(viewport.height);
           const context = canvas.getContext("2d", { alpha: false });
           if (!context) continue;
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, canvas.width, canvas.height);
           context.imageSmoothingEnabled = true;
           context.imageSmoothingQuality = coarse ? "medium" : "high";
           await page.render({ canvasContext: context, viewport, intent: "display" }).promise;
           nextPages.push(canvas);
           nextSizes.push({ width: canvas.width, height: canvas.height });
-          if (!cancelled) {
+          if (!cancelled && (index === 1 || index === document.numPages)) {
+            window.clearTimeout(watchdog);
             setPages(nextPages.slice());
             setSizes(nextSizes.slice());
           }
-          await yieldPaint();
           if (cancelled) return;
           const content = await page.getTextContent();
           const items = content.items.flatMap((item) => {
@@ -189,11 +211,19 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
             ];
           });
           nextMaps.push(buildPageOmrMap(items));
-          if (!cancelled) setMaps(nextMaps.slice());
-          if (index < document.numPages) await yieldPaint();
+          if (!cancelled && index === 1) {
+            setMaps(nextMaps.slice());
+            await yieldPaint();
+          }
+        }
+        if (!cancelled) {
+          setPages(nextPages.slice());
+          setSizes(nextSizes.slice());
+          setMaps(nextMaps.slice());
         }
       } catch {
         pdfDocs.delete(src);
+        window.clearTimeout(watchdog);
         if (!cancelled) {
           setError("시험지를 불러오지 못했습니다.");
           onError?.();
@@ -204,6 +234,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
     void render();
     return () => {
       cancelled = true;
+      window.clearTimeout(watchdog);
     };
   }, [src, baseWidth, renderWidth, onError]);
 
@@ -255,6 +286,7 @@ export function SoloPaper({ src, tool, color, strokes, onStrokes, onMark, zoom =
           pageCount={pages.length}
           omrMap={maps[index]}
           focusQuestion={focusQuestion}
+          fingerScroll={fingerScroll}
         />
       ))}
     </div>
@@ -275,6 +307,7 @@ const PaperPage = memo(function PaperPage({
   pageCount,
   omrMap,
   focusQuestion,
+  fingerScroll,
 }: {
   pageRef?: (node: HTMLDivElement | null) => void;
   pageIndex: number;
@@ -288,6 +321,7 @@ const PaperPage = memo(function PaperPage({
   pageCount: number;
   omrMap?: PageOmrMap;
   focusQuestion?: number | null;
+  fingerScroll?: boolean;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const band = omrMap?.questions.find((item) => item.question === (focusQuestion ?? 0) - 1);
@@ -341,6 +375,10 @@ const PaperPage = memo(function PaperPage({
     if (event.pointerType === "pen" && drawingType.current === "touch") {
       discardStroke();
     }
+    const scrollTouch =
+      event.pointerType === "touch" &&
+      (tool === "pan" || (fingerScroll && tool === "pen"));
+    if (scrollTouch) return;
     if (tool === "pan" && event.pointerType !== "pen") return;
     if (event.pointerType !== "pen" && !shouldAcceptInk(event)) return;
     if (drawingId.current != null && drawingId.current !== event.pointerId) return;
@@ -463,7 +501,8 @@ const PaperPage = memo(function PaperPage({
           tool === "pan" ? "cursor-grab" : tool === "erase" ? "cursor-cell" : "cursor-crosshair",
         )}
         style={{
-          touchAction: tool === "pan" ? "pan-x pan-y" : "none",
+          touchAction:
+            tool === "pan" || (fingerScroll && tool === "pen") ? "pan-x pan-y" : "none",
           WebkitUserSelect: "none",
         }}
         onPointerDown={pointerDown}

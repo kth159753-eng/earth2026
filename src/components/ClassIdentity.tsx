@@ -56,7 +56,7 @@ export function IdentityTile({
           aria-label={`${label} 줄이기`}
           onClick={() => onChange(clamp(value - 1, min, max))}
           className={cn(
-            "grid h-8 w-8 place-items-center text-lg font-bold",
+            "grid h-10 w-10 place-items-center text-lg font-bold sm:h-8 sm:w-8",
             exam ? "text-[#5a3a3a]" : "rounded-[4px] bg-white/10 text-white",
           )}
         >
@@ -75,7 +75,7 @@ export function IdentityTile({
           aria-label={`${label} 늘리기`}
           onClick={() => onChange(clamp(value + 1, min, max))}
           className={cn(
-            "grid h-8 w-8 place-items-center text-lg font-bold",
+            "grid h-10 w-10 place-items-center text-lg font-bold sm:h-8 sm:w-8",
             exam ? "text-[#5a3a3a]" : "rounded-[4px] bg-white/10 text-white",
           )}
         >

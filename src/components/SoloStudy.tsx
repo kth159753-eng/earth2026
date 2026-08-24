@@ -2,7 +2,7 @@
 
 import { IdentityRow } from "@/components/ClassIdentity";
 import { OmrCardSheet } from "@/components/OmrCardSheet";
-import type { InkStroke, SoloTool } from "@/components/SoloPaper";
+import { SoloPaper, type InkStroke, type SoloTool } from "@/components/SoloPaper";
 import { readActiveClass, subscribeActiveClass, writeActiveClass } from "@/lib/active-class";
 import { getAnswerKey, saveSoloArchive } from "@/lib/data";
 import { BASE_PATH } from "@/lib/config";
@@ -11,26 +11,14 @@ import {
   defaultPoints,
   examViewerUrls,
   nearbyExamSessions,
-  warmExamCatalog,
   warmExamSession,
   type ExamSession,
 } from "@/lib/exams";
 import { useProfile } from "@/lib/profile-context";
 import { cn, formatClock } from "@/lib/utils";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-
-const SoloPaper = dynamic(
-  () => import("@/components/SoloPaper").then((mod) => ({ default: mod.SoloPaper })),
-  {
-    ssr: false,
-    loading: () => (
-      <p className="py-24 text-center text-sm text-[#808080]">시험지를 열고 있습니다...</p>
-    ),
-  },
-);
 
 const COLORS = [
   { id: "black", value: "#141414", label: "검정" },
@@ -73,8 +61,8 @@ export function SoloStudy({
   const [paperFailed, setPaperFailed] = useState(false);
   const [inkSource, setInkSource] = useState(0);
   const inkSources = useMemo(
-    () => [files.paperLocal, files.paperPdf].filter((value): value is string => Boolean(value)),
-    [files.paperLocal, files.paperPdf],
+    () => [files.paperLocal].filter((value): value is string => Boolean(value)),
+    [files.paperLocal],
   );
   const paperSrc = !paperFailed ? inkSources[inkSource] ?? null : null;
   const onPaperError = useCallback(() => {
@@ -89,10 +77,13 @@ export function SoloStudy({
   const [omrOpen, setOmrOpen] = useState(false);
   const [omrDesktop, setOmrDesktop] = useState(true);
   const [wide, setWide] = useState(false);
+  const [omrDock, setOmrDock] = useState(false);
+  const [tablet, setTablet] = useState(false);
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const paperPane = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(1);
+  const zoomRaf = useRef(0);
   const [grade, setGrade] = useState(initialGrade ?? 3);
   const [classNumber, setClassNumber] = useState(initialClass ?? 1);
   const [studentNumber, setStudentNumber] = useState(1);
@@ -129,11 +120,20 @@ export function SoloStudy({
 
   useLayoutEffect(() => {
     setHeaderSlot(document.getElementById("earth-header-timer"));
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const apply = () => setWide(mq.matches);
+    const wideMq = window.matchMedia("(min-width: 1024px)");
+    const dockMq = window.matchMedia("(min-width: 768px)");
+    const apply = () => {
+      setWide(wideMq.matches);
+      setOmrDock(dockMq.matches);
+      setTablet(dockMq.matches);
+    };
     apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    wideMq.addEventListener("change", apply);
+    dockMq.addEventListener("change", apply);
+    return () => {
+      wideMq.removeEventListener("change", apply);
+      dockMq.removeEventListener("change", apply);
+    };
   }, []);
 
   function setOmrDesktopPersist(next: boolean) {
@@ -217,7 +217,6 @@ export function SoloStudy({
   useEffect(() => {
     warmExamSession(session);
     for (const item of nearbyExamSessions(session)) warmExamSession(item);
-    warmExamCatalog(session);
     const nodes = [
       Object.assign(document.createElement("link"), {
         rel: "prefetch",
@@ -333,7 +332,7 @@ export function SoloStudy({
       if (!pinching || event.touches.length !== 2) return;
       event.preventDefault();
       const nextZoom = Math.min(3, Math.max(0.5, startZoom * (distance(event.touches[0], event.touches[1]) / startDist)));
-      applyView(nextZoom);
+      applyView(nextZoom, false);
       host.scrollLeft = ((startScroll.left + startMid.x) / startZoom) * nextZoom - startMid.x;
       host.scrollTop = ((startScroll.top + startMid.y) / startZoom) * nextZoom - startMid.y;
     }
@@ -375,20 +374,9 @@ export function SoloStudy({
     endAt.current = null;
   }
 
-  function persistDraft(nextAnswers: number[], nextStrokes: InkStroke[]) {
-    try {
-      localStorage.setItem(
-        storageKey(session.id),
-        JSON.stringify({ answers: nextAnswers, strokes: nextStrokes, grade, classNumber, studentNumber }),
-      );
-    } catch {
-      /* ignore */
-    }
-  }
-
   function rememberWork() {
     historyRef.current = [
-      ...historyRef.current.slice(-49),
+      ...historyRef.current.slice(-19),
       { answers: answersRef.current.slice(), strokes: strokesRef.current.slice() },
     ];
     setHistorySize(historyRef.current.length);
@@ -399,7 +387,6 @@ export function SoloStudy({
     strokesRef.current = nextStrokes;
     setAnswers(nextAnswers);
     setStrokes(nextStrokes);
-    persistDraft(nextAnswers, nextStrokes);
   }
 
   function setAnswer(question: number, choice: number) {
@@ -470,9 +457,21 @@ export function SoloStudy({
     setMessage("");
   }
 
-  function applyView(nextZoom: number) {
+  function applyView(nextZoom: number, immediate = true) {
     const z = Math.min(3, Math.max(0.5, nextZoom));
     zoomRef.current = z;
+    if (!immediate) {
+      if (zoomRaf.current) return;
+      zoomRaf.current = requestAnimationFrame(() => {
+        zoomRaf.current = 0;
+        setZoom(zoomRef.current);
+      });
+      return;
+    }
+    if (zoomRaf.current) {
+      cancelAnimationFrame(zoomRaf.current);
+      zoomRaf.current = 0;
+    }
     setZoom(z);
   }
 
@@ -624,7 +623,7 @@ export function SoloStudy({
       remaining={remaining}
       running={running}
       alarm={alarm}
-      compact={Boolean(headerSlot && wide && !guest)}
+      compact={Boolean((headerSlot && wide && !guest) || !wide)}
       onMinutes={setMinutesLive}
       onSeconds={setSecondsLive}
       onStart={startTimer}
@@ -633,22 +632,20 @@ export function SoloStudy({
     />
   );
   const timerInHeader = Boolean(headerSlot && wide && !guest);
-  const topBar = Boolean(onBack || !timerInHeader);
+  const omrShown = omrDock ? omrDesktop : omrOpen;
   const omrButton = (
     <button
       type="button"
       onClick={() => {
-        if (wide) setOmrDesktopPersist(!omrDesktop);
+        if (omrDock) setOmrDesktopPersist(!omrDesktop);
         else setOmrOpen((value) => !value);
       }}
       className={cn(
-        "h-10 shrink-0 rounded-[4px] px-3 text-xs font-bold",
-        (wide ? omrDesktop : omrOpen)
-          ? "bg-[#e50914] text-white"
-          : "bg-white/10 text-white",
+        "h-11 shrink-0 rounded-[4px] px-3 text-xs font-bold sm:h-10",
+        omrShown ? "bg-[#e50914] text-white" : "bg-white/10 text-white",
       )}
     >
-      {wide && omrDesktop ? "OMR 접기" : "OMR"}
+      {omrDock && omrDesktop ? "OMR 접기" : "OMR"}
     </button>
   );
 
@@ -656,31 +653,30 @@ export function SoloStudy({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0f0f0f]">
       {timerInHeader && headerSlot ? createPortal(timer, headerSlot) : null}
       <div className="z-10 shrink-0 border-b border-white/8 bg-[#141414] px-2 py-1.5 sm:px-4">
-        {topBar ? (
-          <div className="flex items-center gap-2">
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className="h-9 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white"
-              >
-                메뉴
-              </button>
-            ) : null}
-            <p className="min-w-0 flex-1 truncate text-sm font-bold leading-5">
-              {session.label}
-            </p>
-            {omrButton}
-          </div>
-        ) : null}
-        {timerInHeader ? null : <div className={cn(topBar && "mt-1.5")}>{timer}</div>}
-        <div className={cn("flex items-center gap-2 sm:gap-3", (topBar || !timerInHeader) && "mt-1.5")}>
-          {topBar ? null : (
-            <p className="min-w-0 max-w-[36vw] shrink-0 truncate text-sm font-bold leading-5 sm:max-w-[220px]">
+        <div className="flex items-center gap-2">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="h-11 shrink-0 rounded-[4px] bg-white/10 px-3 text-xs font-bold text-white sm:h-10"
+            >
+              메뉴
+            </button>
+          ) : null}
+          {timerInHeader ? (
+            <p className="min-w-0 flex-1 truncate text-sm font-bold leading-5">{session.label}</p>
+          ) : (
+            <div className="min-w-0 flex-1">{timer}</div>
+          )}
+          {omrButton}
+        </div>
+        <div className="mt-1.5 flex items-center gap-2">
+          {timerInHeader ? null : (
+            <p className="hidden min-w-0 max-w-[28vw] shrink-0 truncate text-xs font-bold text-[#d0d0d0] sm:block sm:max-w-[180px] sm:text-sm">
               {session.label}
             </p>
           )}
-          <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="-mx-1 flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
           {COLORS.map((item) => (
             <button
               key={item.id}
@@ -691,7 +687,7 @@ export function SoloStudy({
                 setTool("pen");
               }}
               className={cn(
-                "h-10 w-10 shrink-0 rounded-full border-2 sm:h-9 sm:w-9",
+                "h-11 w-11 shrink-0 rounded-full border-2 sm:h-9 sm:w-9",
                 color === item.value && tool === "pen"
                   ? "border-white"
                   : "border-transparent opacity-70",
@@ -704,7 +700,7 @@ export function SoloStudy({
             title="지우개"
             onClick={() => setTool("erase")}
             className={cn(
-              "grid h-10 w-10 shrink-0 place-items-center rounded-full border sm:h-9 sm:w-9",
+              "grid h-11 w-11 shrink-0 place-items-center rounded-full border sm:h-9 sm:w-9",
               tool === "erase" ? "border-white bg-white text-black" : "border-white/20 bg-white/10 text-white",
             )}
           >
@@ -715,20 +711,20 @@ export function SoloStudy({
             title="화면 이동"
             onClick={() => setTool("pan")}
             className={cn(
-              "grid h-10 w-10 shrink-0 place-items-center rounded-full border sm:h-9 sm:w-9",
+              "grid h-11 w-11 shrink-0 place-items-center rounded-full border sm:h-9 sm:w-9",
               tool === "pan" ? "border-white bg-white text-black" : "border-white/20 bg-white/10 text-white",
             )}
           >
             <PanIcon />
           </button>
-          <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-white/15 sm:block" />
+          <span className="mx-0.5 h-6 w-px shrink-0 bg-white/15" />
           {CHOICES.map((choice) => (
             <button
               key={choice}
               type="button"
               onClick={() => setTool(choice)}
               className={cn(
-                "hidden h-9 w-9 shrink-0 place-items-center rounded-full border text-sm font-bold sm:grid",
+                "grid h-11 w-11 shrink-0 place-items-center rounded-full border text-sm font-bold sm:h-9 sm:w-9",
                 tool === choice
                   ? "border-[#e50914] bg-[#e50914] text-white"
                   : "border-white/20 text-[#d0d0d0]",
@@ -742,7 +738,7 @@ export function SoloStudy({
             title="되돌리기"
             onClick={undoWork}
             disabled={historySize === 0 && strokes.length === 0 && answers.every((value) => value === 0)}
-            className="h-10 shrink-0 rounded-[4px] bg-white/10 px-2.5 text-xs font-bold text-white disabled:opacity-35 sm:h-9"
+            className="h-11 shrink-0 rounded-[4px] bg-white/10 px-2.5 text-xs font-bold text-white disabled:opacity-35 sm:h-9"
           >
             되돌리기
           </button>
@@ -751,7 +747,7 @@ export function SoloStudy({
             title="초기화"
             onClick={resetWork}
             disabled={strokes.length === 0 && answers.every((value) => value === 0) && zoom === 1 && !result}
-            className="h-10 shrink-0 rounded-[4px] bg-[#e50914]/85 px-2.5 text-xs font-bold text-white disabled:opacity-35 sm:h-9"
+            className="h-11 shrink-0 rounded-[4px] bg-[#e50914]/85 px-2.5 text-xs font-bold text-white disabled:opacity-35 sm:h-9"
           >
             초기화
           </button>
@@ -762,7 +758,7 @@ export function SoloStudy({
               aria-label="시험지 축소"
               onClick={() => bumpZoom(-1)}
               disabled={zoom <= ZOOM_STEPS[0]}
-              className="grid h-10 w-10 place-items-center rounded-[4px] text-white disabled:opacity-35 sm:h-9 sm:w-9"
+              className="grid h-11 w-11 place-items-center rounded-[4px] text-white disabled:opacity-35 sm:h-9 sm:w-9"
             >
               <ZoomIcon minus />
             </button>
@@ -780,19 +776,24 @@ export function SoloStudy({
               aria-label="시험지 확대"
               onClick={() => bumpZoom(1)}
               disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]}
-              className="grid h-10 w-10 place-items-center rounded-[4px] text-white disabled:opacity-35 sm:h-9 sm:w-9"
+              className="grid h-11 w-11 place-items-center rounded-[4px] text-white disabled:opacity-35 sm:h-9 sm:w-9"
             >
               <ZoomIcon />
             </button>
           </div>
           </div>
-          {topBar ? null : omrButton}
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1">
-        <div ref={paperPane} className="absolute inset-0 overflow-auto overscroll-contain">
-          <div className="relative min-h-full px-2 py-3 sm:px-4 sm:py-4">
+      <div className="relative min-h-0 flex-1 bg-[#d8d8d8]">
+        <div
+          ref={paperPane}
+          className={cn(
+            "absolute inset-0 overflow-auto overscroll-contain",
+            omrDock && omrDesktop && "md:pr-[236px] xl:pr-[312px]",
+          )}
+        >
+          <div className="relative min-h-full px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-4">
             {paperSrc ? (
               <SoloPaper
                 src={paperSrc}
@@ -803,45 +804,56 @@ export function SoloStudy({
                 onMark={markFromPaper}
                 zoom={zoom}
                 onError={onPaperError}
+                fingerScroll={tablet || tool === "pan"}
               />
             ) : driveSrc ? (
               <iframe
                 title={`${session.label} 시험지`}
                 src={driveSrc}
-                className="pointer-events-none w-full border-0 bg-white"
-                style={{ height: `${Math.max(220, Math.round(220 * zoom))}vh` }}
+                className="min-h-[140vh] w-full border-0 bg-white"
                 allow="autoplay; fullscreen"
                 allowFullScreen
               />
             ) : (
-              <p className="py-24 text-center text-sm text-[#808080]">이 회차 시험지가 없습니다.</p>
+              <p className="py-24 text-center text-sm text-[#404040]">이 회차 시험지가 없습니다.</p>
             )}
           </div>
         </div>
-        {omrDesktop ? (
-          <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-[260px] lg:block xl:inset-y-3 xl:right-3 xl:w-[300px]">
+        {omrDock && omrDesktop ? (
+          <div className="pointer-events-none absolute inset-y-2 right-2 hidden w-[220px] md:block xl:inset-y-3 xl:right-3 xl:w-[300px]">
             <div className="pointer-events-auto h-full min-h-0">{omrCard}</div>
           </div>
-        ) : (
+        ) : omrDock ? (
           <button
             type="button"
             onClick={() => setOmrDesktopPersist(true)}
-            className="absolute top-1/2 right-0 hidden -translate-y-1/2 rounded-l-[4px] border border-r-0 border-white/10 bg-[#c41e3a] px-2 py-8 text-[11px] font-black tracking-[0.18em] text-white lg:block"
+            className="absolute top-1/2 right-0 hidden -translate-y-1/2 rounded-l-[4px] border border-r-0 border-white/10 bg-[#c41e3a] px-2 py-10 text-[11px] font-black tracking-[0.18em] text-white md:block"
           >
             OMR
           </button>
-        )}
+        ) : !omrOpen ? (
+          <button
+            type="button"
+            onClick={() => setOmrOpen(true)}
+            className="absolute top-1/2 right-0 -translate-y-1/2 rounded-l-[4px] border border-r-0 border-white/10 bg-[#c41e3a] px-2 py-8 text-[11px] font-black tracking-[0.18em] text-white md:hidden"
+          >
+            OMR
+          </button>
+        ) : null}
       </div>
 
-      {omrOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
+      {omrOpen && !omrDock ? (
+        <div className="fixed inset-0 z-40">
           <button
             type="button"
             className="absolute inset-0 bg-black/70"
             aria-label="닫기"
             onClick={() => setOmrOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 h-[min(82dvh,720px)] overflow-hidden rounded-t-xl pb-[env(safe-area-inset-bottom)] sm:inset-y-0 sm:right-0 sm:left-auto sm:h-auto sm:w-[min(380px,92vw)] sm:rounded-none">
+          <div className="absolute inset-x-0 bottom-0 h-[min(78dvh,680px)] overflow-hidden rounded-t-xl pb-[env(safe-area-inset-bottom)]">
+            <div className="flex justify-center pt-1.5">
+              <span className="h-1 w-10 rounded-full bg-black/25" />
+            </div>
             {omrCard}
           </div>
         </div>
@@ -925,7 +937,7 @@ function SoloTimerBar({
           type="button"
           onClick={onStart}
           disabled={running}
-          className="h-8 min-w-11 rounded-[4px] bg-[#e50914] px-1.5 text-[11px] font-bold text-white disabled:bg-white/10 disabled:text-white/45"
+          className="h-10 min-w-11 rounded-[4px] bg-[#e50914] px-1.5 text-[11px] font-bold text-white disabled:bg-white/10 disabled:text-white/45 sm:h-8"
         >
           시작
         </button>
@@ -933,14 +945,14 @@ function SoloTimerBar({
           type="button"
           onClick={onStop}
           disabled={!running}
-          className="h-8 min-w-11 rounded-[4px] bg-[#e50914] px-1.5 text-[11px] font-bold text-white disabled:bg-white/10 disabled:text-white/45"
+          className="h-10 min-w-11 rounded-[4px] bg-[#e50914] px-1.5 text-[11px] font-bold text-white disabled:bg-white/10 disabled:text-white/45 sm:h-8"
         >
           정지
         </button>
         <button
           type="button"
           onClick={onReset}
-          className="h-8 min-w-11 rounded-[4px] bg-white/12 px-1.5 text-[11px] font-bold text-white"
+          className="h-10 min-w-11 rounded-[4px] bg-white/12 px-1.5 text-[11px] font-bold text-white sm:h-8"
         >
           리셋
         </button>

@@ -113,7 +113,7 @@ export function SectionTitle({
 
 export function headerChipClass(active = false, kind: "nav" | "ghost" | "gold" = "nav") {
   return cn(
-    "group relative inline-flex h-9 min-h-9 shrink-0 items-center gap-1.5 rounded-[5px] px-1.5 text-[12px] font-semibold tracking-tight transition duration-200",
+    "group relative inline-flex h-10 min-h-10 shrink-0 items-center gap-1.5 rounded-[5px] px-1.5 text-[12px] font-semibold tracking-tight",
     "active:translate-y-px sm:h-11 sm:min-h-11 sm:gap-2 sm:px-2.5 sm:text-[13px]",
     kind === "gold"
       ? "border border-[#ffd400]/40 bg-[#ffd400]/[0.08] text-[#ffd400]"
@@ -141,7 +141,7 @@ export function HeaderIconWell({
   return (
     <span
       className={cn(
-        "grid h-6 w-6 shrink-0 place-items-center rounded-[5px] transition duration-200 sm:h-7 sm:w-7",
+        "grid h-6 w-6 shrink-0 place-items-center rounded-[5px] sm:h-7 sm:w-7",
         tone === "gold"
           ? "bg-[#ffd400] text-black shadow-[0_0_12px_rgba(255,212,0,0.28)]"
           : tone === "muted"

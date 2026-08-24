@@ -83,7 +83,7 @@ export function OmrForm({
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-3 py-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <main className="mx-auto flex h-full min-h-0 w-full max-w-xl flex-col px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-4">
       {onBack ? (
         <button
           type="button"
@@ -95,7 +95,7 @@ export function OmrForm({
       ) : null}
 
       <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-[28rem] flex-1 sm:min-h-[36rem]">
+        <div className="min-h-0 flex-1">
           <OmrCardSheet
             title={session?.label ?? "모의고사"}
             subtitle={`${gradeLabel(meta.grade)} ${classLabel(meta.class_number)} · 이름 없이 번호만`}

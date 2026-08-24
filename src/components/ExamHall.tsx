@@ -351,7 +351,7 @@ export function ExamHall({ session, classes }: Props) {
   }, []);
 
   return (
-    <div className="relative isolate flex min-h-[calc(100dvh-72px)] flex-col overflow-x-hidden bg-[#141414] pb-[env(safe-area-inset-bottom)] lg:h-[calc(100dvh-72px)] lg:overflow-hidden">
+    <div className="relative isolate flex min-h-[calc(100dvh-8.5rem)] flex-col overflow-x-hidden bg-[#141414] pb-[env(safe-area-inset-bottom)] lg:h-[calc(100dvh-72px)] lg:min-h-0 lg:overflow-hidden">
       <div className="starfield" />
       <div className="vignette" />
 

@@ -44,7 +44,7 @@ export function OmrCardSheet({
               <button
                 type="button"
                 onClick={onCollapse}
-                className="h-8 shrink-0 rounded-[2px] bg-black/20 px-2.5 text-[11px] font-black text-white"
+                className="h-10 shrink-0 rounded-[2px] bg-black/20 px-3 text-[12px] font-black text-white sm:h-8"
               >
                 접기
               </button>
@@ -122,7 +122,7 @@ export function OmrCardSheet({
                             onAnswer(question, choice);
                           }}
                           className={cn(
-                            "grid h-7 w-7 place-items-center rounded-full border-[1.6px] text-[10px] font-black sm:h-8 sm:w-8",
+                            "grid h-9 w-9 place-items-center rounded-full border-[1.6px] text-[11px] font-black sm:h-8 sm:w-8",
                             selected
                               ? "border-[#141414] bg-[#141414] text-[#f3ead6]"
                               : "border-[#141414] bg-[#fffdf6] text-[#c41e3a]",
