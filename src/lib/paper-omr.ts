@@ -174,10 +174,10 @@ function boxesForChoices(
       return {
         question,
         choice: item.choice,
-        x0: prev ? (prev.x + item.x) / 2 : item.x - 0.03,
-        x1: next ? (item.x + next.x) / 2 : item.x + 0.075,
-        y0: item.y - 0.022,
-        y1: item.y + 0.032,
+        x0: prev ? (prev.x + item.x) / 2 : item.x - 0.04,
+        x1: next ? (item.x + next.x) / 2 : item.x + 0.09,
+        y0: item.y - 0.028,
+        y1: item.y + 0.04,
       };
     });
   }
@@ -190,10 +190,10 @@ function boxesForChoices(
       return {
         question,
         choice: item.choice,
-        x0: item.x - 0.03,
-        x1: Math.min(0.95, item.x + 0.34),
-        y0: prev ? (prev.y + item.y) / 2 : item.y - 0.016,
-        y1: next ? (item.y + next.y) / 2 : item.y + 0.02,
+        x0: item.x - 0.04,
+        x1: Math.min(0.95, item.x + 0.38),
+        y0: prev ? (prev.y + item.y) / 2 : item.y - 0.022,
+        y1: next ? (item.y + next.y) / 2 : item.y + 0.028,
       };
     });
   }
@@ -201,10 +201,10 @@ function boxesForChoices(
   return items.map((item) => ({
     question,
     choice: item.choice,
-    x0: item.x - 0.035,
-    x1: item.x + 0.08,
-    y0: item.y - 0.018,
-    y1: item.y + 0.02,
+    x0: item.x - 0.045,
+    x1: item.x + 0.1,
+    y0: item.y - 0.024,
+    y1: item.y + 0.028,
   }));
 }
 
@@ -241,7 +241,7 @@ export function locateFromMap(
       best = { question: hit.question, choice: hit.choice, dist };
     }
   }
-  if (best && best.dist <= 0.055) {
+  if (best && best.dist <= 0.07) {
     return { question: best.question, choice: best.choice };
   }
 

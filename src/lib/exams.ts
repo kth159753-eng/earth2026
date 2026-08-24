@@ -133,6 +133,7 @@ export function examViewerUrls(session: ExamSession) {
     paperOpen: drive.paperOpen ?? (hasLocal ? local.paper : null),
     solutionOpen: drive.solutionOpen ?? (hasLocal ? local.solution : null),
     paperLocal: hasLocal ? local.paper : null,
+    paperPdf: drive.paperPdf,
     paperDrive: drive.paper,
     solutionDrive: drive.solution,
   };
@@ -191,6 +192,10 @@ function driveFileUrl(fileId: string, mode: "preview" | "view") {
     : `https://drive.google.com/file/d/${fileId}/view`;
 }
 
+export function driveMediaUrl(fileId: string) {
+  return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+}
+
 function sessionIdFromDriveName(name: string) {
   const match = name.match(/^(\d{4})_(\d{1,2})월( 지2)?(\(답\))?\.pdf$/);
   if (!match) return null;
@@ -220,7 +225,16 @@ export function driveExamUrls(session: ExamSession) {
     solution: files.solution ? driveFileUrl(files.solution, "preview") : null,
     paperOpen: files.paper ? driveFileUrl(files.paper, "view") : null,
     solutionOpen: files.solution ? driveFileUrl(files.solution, "view") : null,
+    paperPdf: files.paper ? driveMediaUrl(files.paper) : null,
+    solutionPdf: files.solution ? driveMediaUrl(files.solution) : null,
   };
+}
+
+export function driveExamFiles() {
+  return DRIVE_FILE_LIST.map((file) => {
+    const parsed = sessionIdFromDriveName(file.name);
+    return parsed ? { ...file, ...parsed } : null;
+  }).filter((file): file is NonNullable<typeof file> => Boolean(file));
 }
 
 export function nearbyExamSessions(session: ExamSession) {

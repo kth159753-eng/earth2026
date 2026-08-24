@@ -69,13 +69,22 @@ export function SoloStudy({
   const profile = useProfile();
   const showVault = !guest && profile?.role !== "teacher";
   const files = useMemo(() => examViewerUrls(session), [session]);
-  const localSrc = files.paperLocal;
   const driveSrc = files.paperDrive ?? (files.paper?.includes("drive.google.com") ? files.paper : null);
-  const [localReady, setLocalReady] = useState(false);
   const [paperFailed, setPaperFailed] = useState(false);
-  const paperSrc = localReady && localSrc && !paperFailed ? localSrc : null;
-  const onPaperError = useCallback(() => setPaperFailed(true), []);
-  const [tool, setTool] = useState<SoloTool>(guest ? "pan" : "pen");
+  const [inkSource, setInkSource] = useState(0);
+  const inkSources = useMemo(
+    () => [files.paperLocal, files.paperPdf].filter((value): value is string => Boolean(value)),
+    [files.paperLocal, files.paperPdf],
+  );
+  const paperSrc = !paperFailed ? inkSources[inkSource] ?? null : null;
+  const onPaperError = useCallback(() => {
+    setInkSource((index) => {
+      if (index + 1 < inkSources.length) return index + 1;
+      setPaperFailed(true);
+      return index;
+    });
+  }, [inkSources.length]);
+  const [tool, setTool] = useState<SoloTool>("pen");
   const [color, setColor] = useState<(typeof COLORS)[number]["value"]>(COLORS[0].value);
   const [omrOpen, setOmrOpen] = useState(false);
   const [omrDesktop, setOmrDesktop] = useState(true);
@@ -138,6 +147,7 @@ export function SoloStudy({
 
   useEffect(() => {
     setPaperFailed(false);
+    setInkSource(0);
     historyRef.current = [];
     setHistorySize(0);
     try {
@@ -219,11 +229,6 @@ export function SoloStudy({
   }, [session]);
 
   useEffect(() => {
-    setLocalReady(false);
-    setPaperFailed(false);
-  }, [session.id]);
-
-  useEffect(() => {
     let cancelled = false;
     getAnswerKey(session.id)
       .then((key) => {
@@ -289,7 +294,6 @@ export function SoloStudy({
     if (!node) return;
     const host: HTMLDivElement = node;
     const onWheel = (event: WheelEvent) => {
-      if (!(event.ctrlKey || event.metaKey || event.deltaY)) return;
       if (!(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       bumpZoom(event.deltaY < 0 ? 1 : -1);
@@ -788,28 +792,24 @@ export function SoloStudy({
 
       <div className="relative min-h-0 flex-1">
         <div ref={paperPane} className="absolute inset-0 overflow-auto overscroll-contain">
-          <div
-            className="relative"
-            style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%`, minHeight: "100%" }}
-          >
-            {paperSrc && !paperFailed ? (
-              <div className="min-h-full min-w-full px-2 py-3 sm:px-4 sm:py-4">
-                <SoloPaper
-                  src={paperSrc}
-                  tool={tool}
-                  color={color}
-                  strokes={strokes}
-                  onStrokes={handleStrokes}
-                  onMark={markFromPaper}
-                  zoom={1}
-                  onError={onPaperError}
-                />
-              </div>
+          <div className="relative min-h-full px-2 py-3 sm:px-4 sm:py-4">
+            {paperSrc ? (
+              <SoloPaper
+                src={paperSrc}
+                tool={tool}
+                color={color}
+                strokes={strokes}
+                onStrokes={handleStrokes}
+                onMark={markFromPaper}
+                zoom={zoom}
+                onError={onPaperError}
+              />
             ) : driveSrc ? (
               <iframe
                 title={`${session.label} 시험지`}
                 src={driveSrc}
-                className="pointer-events-none h-full w-full border-0 bg-white"
+                className="pointer-events-none w-full border-0 bg-white"
+                style={{ height: `${Math.max(220, Math.round(220 * zoom))}vh` }}
                 allow="autoplay; fullscreen"
                 allowFullScreen
               />

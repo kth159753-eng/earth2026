@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "fetch-exams": "node scripts/fetch-exam-pdfs.mjs",
     "start": "next start",
     "lint": "eslint"
   },

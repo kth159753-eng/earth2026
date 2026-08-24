@@ -38,6 +38,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Fetch exam PDFs
+        run: npm run fetch-exams
+
       - name: Build static site
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}

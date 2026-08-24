@@ -42,6 +42,7 @@ function loadPdf(src: string) {
       disableStream: true,
       disableRange: true,
       disableAutoFetch: false,
+      withCredentials: false,
     }).promise,
   );
   pdfDocs.set(src, pending);
@@ -340,8 +341,8 @@ const PaperPage = memo(function PaperPage({
     if (event.pointerType === "pen" && drawingType.current === "touch") {
       discardStroke();
     }
-    if (tool === "pan") return;
-    if (!shouldAcceptInk(event)) return;
+    if (tool === "pan" && event.pointerType !== "pen") return;
+    if (event.pointerType !== "pen" && !shouldAcceptInk(event)) return;
     if (drawingId.current != null && drawingId.current !== event.pointerId) return;
 
     const point = pointFromClient(event.clientX, event.clientY);
@@ -378,9 +379,10 @@ const PaperPage = memo(function PaperPage({
       id: `${Date.now()}-${Math.random()}`,
       page: pageIndex,
       color,
-      width: event.pointerType === "pen" ? 0.0038 : 0.0046,
+      width: event.pointerType === "pen" ? 0.0032 : 0.0046,
       points: [point],
     };
+    drawingType.current = event.pointerType;
   }
 
   function pointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -413,14 +415,16 @@ const PaperPage = memo(function PaperPage({
     noteInkPointer(event);
     if (drawingId.current != null && drawingId.current !== event.pointerId) return;
     const stroke = drawing.current;
+    const pointerKind = drawingType.current;
     discardStroke();
     if (!stroke || stroke.points.length < 1) return;
     const last = stroke.points[stroke.points.length - 1] ?? stroke.points[0];
     const focus = strokeCentroid(stroke.points);
     const boxed = hitChoiceBox(omrMap, focus) ?? (last ? hitChoiceBox(omrMap, last) : null);
+    const tap = isCheckStroke(stroke) || (pointerKind === "pen" && stroke.points.length <= 12);
     const located =
       boxed ??
-      (isCheckStroke(stroke)
+      (tap
         ? locateFromMap(omrMap, focus) ??
           (last ? locateFromMap(omrMap, last) : null) ??
           (last ? locateMark(pageIndex, pageCount, last.x, last.y) : null)
@@ -455,11 +459,13 @@ const PaperPage = memo(function PaperPage({
       <canvas
         ref={inkRef}
         className={cn(
-          "absolute inset-0 h-full w-full touch-none select-none",
-          tool === "pan" && "pointer-events-none",
-          tool === "erase" ? "cursor-cell" : "cursor-crosshair",
+          "absolute inset-0 h-full w-full select-none",
+          tool === "pan" ? "cursor-grab" : tool === "erase" ? "cursor-cell" : "cursor-crosshair",
         )}
-        style={{ touchAction: "none", WebkitUserSelect: "none" }}
+        style={{
+          touchAction: tool === "pan" ? "pan-x pan-y" : "none",
+          WebkitUserSelect: "none",
+        }}
         onPointerDown={pointerDown}
         onPointerMove={pointerMove}
         onPointerUp={pointerUp}
@@ -529,7 +535,7 @@ function isCheckStroke(stroke: InkStroke) {
     }
   }
   const box = Math.max(maxX - minX, maxY - minY);
-  return box < 0.055 || (box < 0.08 && length < 0.16);
+  return box < 0.07 || (box < 0.11 && length < 0.24);
 }
 
 function locateMark(pageIndex: number, pageCount: number, x: number, y: number) {
