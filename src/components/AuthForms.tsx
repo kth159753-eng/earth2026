@@ -150,10 +150,10 @@ export function LoginForm() {
         </Button>
       </form>
       <div className="mt-4 flex items-center justify-between text-sm text-[#b3b3b3]">
-        <Link href="/forgot-password" className="hover:text-white">
+        <Link href="/forgot-password/" className="hover:text-white">
           비밀번호 찾기
         </Link>
-        <Link href="/signup" className="hover:text-white">
+        <Link href="/signup/" className="hover:text-white">
           회원가입
         </Link>
       </div>

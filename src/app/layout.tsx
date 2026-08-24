@@ -1,3 +1,4 @@
+import { TrailingSlash } from "@/components/TrailingSlash";
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
@@ -31,7 +32,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <link rel="preconnect" href="https://cvfivbtvchypbeciulef.supabase.co" />
         <link rel="dns-prefetch" href="https://cvfivbtvchypbeciulef.supabase.co" />
       </head>
-      <body className={`${sans.className} min-h-full bg-void text-white`}>{children}</body>
+      <body className={`${sans.className} min-h-full bg-void text-white`}>
+        <TrailingSlash />
+        {children}
+      </body>
     </html>
   );
 }
