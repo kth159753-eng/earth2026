@@ -45,11 +45,12 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
           NEXT_PUBLIC_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-        run: npm run build
+        run: npx --no-install next build
 
       - name: Check export
         run: |
           test -d out && test -f out/index.html
+          touch out/.nojekyll
           echo "Static export is ready."
 
       - name: Upload Pages artifact

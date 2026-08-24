@@ -285,21 +285,21 @@ export function SoloStudy({
   }, []);
 
   useEffect(() => {
-    const pane = paperPane.current;
-    if (!pane) return;
+    const host = paperPane.current;
+    if (!host) return;
     const onWheel = (event: WheelEvent) => {
       if (!(event.ctrlKey || event.metaKey || event.deltaY)) return;
       if (!(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       bumpZoom(event.deltaY < 0 ? 1 : -1);
     };
-    pane.addEventListener("wheel", onWheel, { passive: false });
-    return () => pane.removeEventListener("wheel", onWheel);
+    host.addEventListener("wheel", onWheel, { passive: false });
+    return () => host.removeEventListener("wheel", onWheel);
   }, []);
 
   useEffect(() => {
-    const pane = paperPane.current;
-    if (!pane) return;
+    const host = paperPane.current;
+    if (!host) return;
     let pinching = false;
     let startDist = 1;
     let startZoom = 1;
@@ -310,7 +310,12 @@ export function SoloStudy({
       return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     }
 
+    function scroller() {
+      return paperPane.current ?? host;
+    }
+
     function onStart(event: TouchEvent) {
+      const pane = scroller();
       if (event.touches.length !== 2) return;
       pinching = true;
       startDist = distance(event.touches[0], event.touches[1]) || 1;
@@ -324,6 +329,7 @@ export function SoloStudy({
     }
 
     function onMove(event: TouchEvent) {
+      const pane = scroller();
       if (!pinching || event.touches.length !== 2) return;
       event.preventDefault();
       const nextZoom = Math.min(3, Math.max(0.5, startZoom * (distance(event.touches[0], event.touches[1]) / startDist)));
@@ -336,15 +342,15 @@ export function SoloStudy({
       if (event.touches.length < 2) pinching = false;
     }
 
-    pane.addEventListener("touchstart", onStart, { capture: true, passive: true });
-    pane.addEventListener("touchmove", onMove, { capture: true, passive: false });
-    pane.addEventListener("touchend", onEnd, { capture: true });
-    pane.addEventListener("touchcancel", onEnd, { capture: true });
+    host.addEventListener("touchstart", onStart, { capture: true, passive: true });
+    host.addEventListener("touchmove", onMove, { capture: true, passive: false });
+    host.addEventListener("touchend", onEnd, { capture: true });
+    host.addEventListener("touchcancel", onEnd, { capture: true });
     return () => {
-      pane.removeEventListener("touchstart", onStart, true);
-      pane.removeEventListener("touchmove", onMove, true);
-      pane.removeEventListener("touchend", onEnd, true);
-      pane.removeEventListener("touchcancel", onEnd, true);
+      host.removeEventListener("touchstart", onStart, true);
+      host.removeEventListener("touchmove", onMove, true);
+      host.removeEventListener("touchend", onEnd, true);
+      host.removeEventListener("touchcancel", onEnd, true);
     };
   }, []);
 
