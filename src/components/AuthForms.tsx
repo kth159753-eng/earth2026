@@ -147,19 +147,6 @@ export function SignupForm() {
     setPending(true);
     try {
       const supabase = createClient();
-      const { data: available, error: checkError } = await supabase.rpc(
-        "is_username_available",
-        { p_username: username.trim() },
-      );
-      if (checkError) {
-        setError("아이디 확인에 실패했습니다. SQL Editor에서 schema.sql을 실행했는지 확인해 주세요.");
-        return;
-      }
-      if (available === false) {
-        setError("이미 사용 중인 아이디입니다.");
-        return;
-      }
-
       const { data, error: signError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -168,7 +155,6 @@ export function SignupForm() {
             username: username.trim().toLowerCase(),
             full_name: fullName.trim(),
           },
-          emailRedirectTo: `${siteUrl()}/exam/2025-03-I/`,
         },
       });
       if (signError) {
@@ -176,7 +162,7 @@ export function SignupForm() {
         return;
       }
       if (!data.session) {
-        setInfo("가입이 접수되었습니다. 메일함을 확인해 주세요.");
+        setInfo("가입이 접수되었습니다. 바로 로그인할 수 있습니다.");
         return;
       }
       router.replace("/admin/");

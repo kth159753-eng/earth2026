@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { supabasePublicKey, supabaseUrl } from "@/lib/supabase/env";
 
 export function createClient() {
@@ -7,5 +7,11 @@ export function createClient() {
   if (!url || !key) {
     throw new Error("Supabase 환경 변수가 없습니다.");
   }
-  return createBrowserClient(url, key);
+  return createSupabaseClient(url, key, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
 }
