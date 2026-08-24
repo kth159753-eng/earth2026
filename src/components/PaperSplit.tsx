@@ -1,9 +1,9 @@
 "use client";
 
 import { saveExamAsset } from "@/lib/actions/teacher";
-import { publicExamPaths, type ExamSession } from "@/lib/exams";
+import { driveExamUrls, type ExamSession } from "@/lib/exams";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Notice } from "@/components/ui";
+import { Notice } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -13,11 +13,16 @@ type Props = {
 };
 
 export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
-  const fallback = useMemo(() => publicExamPaths(session), [session]);
+  const drive = useMemo(() => driveExamUrls(session), [session]);
   const [paper, setPaper] = useState(paperUrl);
   const [solution, setSolution] = useState(solutionUrl);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setPaper(paperUrl);
+    setSolution(solutionUrl);
+  }, [paperUrl, solutionUrl, session.id]);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-3 py-5 sm:px-5">
@@ -35,7 +40,8 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
         <PaperPane
           title="시험지"
           url={paper}
-          fallback={fallback.paper}
+          driveUrl={drive.paper}
+          openUrl={drive.paperOpen}
           onUploaded={async (path, url) => {
             setError("");
             try {
@@ -50,7 +56,8 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
         <PaperPane
           title="해설지"
           url={solution}
-          fallback={fallback.solution}
+          driveUrl={drive.solution}
+          openUrl={drive.solutionOpen}
           onUploaded={async (path, url) => {
             setError("");
             try {
@@ -67,40 +74,26 @@ export function PaperSplit({ session, paperUrl, solutionUrl }: Props) {
   );
 }
 
+function isImageSrc(src: string) {
+  return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(src);
+}
+
 function PaperPane({
   title,
   url,
-  fallback,
+  driveUrl,
+  openUrl,
   onUploaded,
 }: {
   title: string;
   url: string | null;
-  fallback: string;
+  driveUrl: string | null;
+  openUrl: string | null;
   onUploaded: (path: string, url: string) => Promise<void>;
 }) {
-  const [src, setSrc] = useState(url ?? fallback);
-  const [empty, setEmpty] = useState(!url);
+  const src = url ?? driveUrl;
+  const href = url ?? openUrl ?? driveUrl;
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (url) {
-      setSrc(url);
-      setEmpty(false);
-      return;
-    }
-    let cancelled = false;
-    fetch(fallback, { method: "HEAD" })
-      .then((response) => {
-        if (!cancelled && response.ok) {
-          setSrc(fallback);
-          setEmpty(false);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [url, fallback]);
 
   async function upload(file: File) {
     setPending(true);
@@ -121,8 +114,6 @@ function PaperPane({
       const { data } = await supabase.storage.from("exam-files").createSignedUrl(path, 60 * 30);
       if (!data?.signedUrl) throw new Error("signed");
       await onUploaded(path, data.signedUrl);
-      setSrc(data.signedUrl);
-      setEmpty(false);
     } finally {
       setPending(false);
     }
@@ -133,9 +124,9 @@ function PaperPane({
       <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
         <h2 className="text-sm font-semibold tracking-wide">{title}</h2>
         <div className="flex items-center gap-2">
-          {!empty ? (
+          {href ? (
             <a
-              href={src}
+              href={href}
               target="_blank"
               rel="noreferrer"
               className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-stone-300"
@@ -160,48 +151,23 @@ function PaperPane({
         </div>
       </div>
       <div className="min-h-[68vh] bg-[#0a0d12]">
-        {empty ? (
-          <div className="grid min-h-[68vh] place-items-center px-6 text-center">
-            <div>
-              <p className="text-lg text-stone-200">{title} 미리보기</p>
-              <p className="mt-2 max-w-sm text-sm leading-6 text-stone-500">
-                첨부하신 파일을 여기에 올려 주세요. 또는{" "}
-                <code className="text-white">public/exams/{decodeURIComponent(fallback.split("/")[2] || "")}/</code>
-                폴더에 paper.pdf / solution.pdf를 넣으면 자동으로 보입니다.
-              </p>
-              <div className="mt-5">
-                <Button
-                  variant="line"
-                  className="h-10"
-                  onClick={() => {
-                    const probe = new Image();
-                    probe.onload = () => {
-                      setSrc(fallback.replace(".pdf", ".png"));
-                      setEmpty(false);
-                    };
-                    probe.onerror = () => {
-                      fetch(fallback, { method: "HEAD" })
-                        .then((response) => {
-                          if (response.ok) {
-                            setSrc(fallback);
-                            setEmpty(false);
-                          }
-                        })
-                        .catch(() => undefined);
-                    };
-                    probe.src = fallback.replace(".pdf", ".png");
-                  }}
-                >
-                  저장된 파일 확인
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : src.toLowerCase().includes(".pdf") || src.includes("application/pdf") ? (
-          <iframe title={title} src={src} className="h-[78vh] w-full border-0 bg-white" />
+        {src ? (
+          isImageSrc(src) ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={src} alt={title} className="mx-auto max-h-[78vh] w-full object-contain" />
+          ) : (
+            <iframe
+              title={title}
+              src={src}
+              className="h-[78vh] w-full border-0 bg-white"
+              allow="autoplay"
+              allowFullScreen
+            />
+          )
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={title} className="mx-auto max-h-[78vh] w-full object-contain" />
+          <div className="grid min-h-[68vh] place-items-center px-6 text-center">
+            <p className="text-sm text-stone-400">이 회차 파일이 아직 없습니다.</p>
+          </div>
         )}
       </div>
     </section>
